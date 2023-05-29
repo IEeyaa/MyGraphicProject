@@ -1,6 +1,8 @@
 # MyGraphicProject
 ZJU《现代图形学理论研究》SIGGRAPH 2022 论文复现作业
 
+项目启动:main.py
+
 
 
 **复现论文：Symmetry-driven 3D Reconstruction from Concept Sketches**

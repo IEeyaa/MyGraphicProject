@@ -3,43 +3,10 @@
 """
     该部分用于草图从png、svg等格式的文件转变成合适的格式
 """
-import math
 from xml.dom import minidom
+from shapely.geometry import LineString
 
-
-class Stroke:
-    def __init__(self, stroke_points):
-        """
-        初始化Stroke对象。
-
-        参数：
-        - stroke_points：表示折线的点坐标列表
-
-        Stroke对象包含以下属性：
-        - pointNumber：折线的点数量
-        - coordinates：折线的点坐标列表
-        - length：折线的长度
-
-        """
-        self.pointNumber = len(stroke_points)
-        self.coordinates = stroke_points
-        self.length = self.calculate_length()
-
-    def calculate_length(self):
-        """
-        计算折线的长度。
-
-        返回值：
-        - length：折线的长度
-
-        """
-        length = 0.0
-        for i in range(len(self.coordinates) - 1):
-            x1, y1 = self.coordinates[i]
-            x2, y2 = self.coordinates[i + 1]
-            segment_length = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-            length += segment_length
-        return length
+from sketch.sketch_info import Stroke, Sketch
 
 
 def get_sketch_from_image(filepath):
@@ -62,6 +29,14 @@ def get_sketch_from_image(filepath):
     # 解析SVG文件
     graphInfo = minidom.parse(filepath)
 
+    # 获取viewBox属性值
+    viewBox = graphInfo.documentElement.getAttribute('viewBox')
+
+    # 提取宽度和高度
+    values = viewBox.split(' ')
+    width = values[2]
+    height = values[3]
+
     # 获取所有的polyline元素
     polyline_elements = graphInfo.getElementsByTagName("polyline")
 
@@ -69,7 +44,7 @@ def get_sketch_from_image(filepath):
     strokes = []
 
     # 遍历每个polyline元素
-    for polyline in polyline_elements:
+    for index, polyline in enumerate(polyline_elements):
         # 获取polyline的点坐标信息
         points_str = polyline.getAttribute("points")
         points = []
@@ -79,13 +54,13 @@ def get_sketch_from_image(filepath):
             y = float(coordinates[i + 1])
             points.append((x, y))
         # 创建Stroke对象并添加到列表中
-        stroke = Stroke(points)
+        stroke = Stroke(index, LineString(points))
         strokes.append(stroke)
 
-    # 打印每个Stroke对象的信息
-    for stroke in strokes:
-        print("Stroke: ", stroke.pointNumber, stroke.length)
+    # 将信息存储到Sketch中
+    sketch = Sketch(width, height, 1, strokes)
+    return sketch
 
 
 if __name__ == '__main__':
-    get_sketch_from_image("./data/sketch.svg")
+    sketch = get_sketch_from_image("./data/sketch.svg")
