@@ -4,7 +4,10 @@
     该部分用于草图从png、svg等格式的文件转变成合适的格式
 """
 from xml.dom import minidom
+
+import numpy as np
 from shapely.geometry import LineString
+from svgpathtools import parse_path
 
 from sketch.sketch_info import Stroke, Sketch
 
@@ -40,8 +43,12 @@ def get_sketch_from_image(filepath):
     # 获取所有的polyline元素
     polyline_elements = graphInfo.getElementsByTagName("polyline")
 
+    path_elements = graphInfo.getElementsByTagName("path")
+
     # 创建存储Stroke对象的列表
     strokes = []
+
+    total_index = 0
 
     # 遍历每个polyline元素
     for index, polyline in enumerate(polyline_elements):
@@ -56,10 +63,21 @@ def get_sketch_from_image(filepath):
         # 创建Stroke对象并添加到列表中
         stroke = Stroke(index, LineString(points))
         strokes.append(stroke)
+        total_index += 1
+
+    for index_path, path_data in enumerate(path_elements):
+        # 获取path的点坐标信息
+        path = parse_path(path_data.getAttribute("d"))
+        coordinates = [path.point(t) for t in np.linspace(0, 1.0, 10)]
+        # 解析path信息，提取点坐标
+        points = [(c.real, c.imag) for c in coordinates]
+        # 创建Stroke对象并添加到列表中
+        stroke = Stroke(index_path + total_index, LineString(points))
+        strokes.append(stroke)
 
     # 将信息存储到Sketch中
-    sketch = Sketch(width, height, 1, strokes)
-    return sketch
+    initial_sketch = Sketch(float(width), float(height), 1, strokes)
+    return initial_sketch
 
 
 if __name__ == '__main__':

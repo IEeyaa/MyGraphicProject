@@ -25,7 +25,8 @@ class Stroke:
         self.lineString = line_string
         self.pointNumber = len(line_string.coords)
         self.length = self.calculate_length()
-        self.type = "lines"
+        self.axis_label = -1
+        self.is_curved = False
 
     def set_stroke_id(self, stroke_id):
         self.id = stroke_id
@@ -153,12 +154,12 @@ class Sketch:
 
                 # 检查距离是否小于阈值，判断为直线
                 if np.any(distances >= threshold_distance):
-                    stroke.type = "curve"
+                    stroke.is_curved = True
                 else:
-                    stroke.type = "line"
+                    stroke.is_curved = False
                     # self.strokes[stroke.id].lineString = LineString([(x[0], y[0]), (x[-1], y[-1])])
             else:
-                stroke.type = "line"
+                stroke.is_curved = False
                 # self.strokes[stroke.id].lineString = LineString([(x[0], y[0]), (x[-1], y[-1])])
 
     def get_line_cluster(self, threshold_distance, threshold_angle, threshold_index):
@@ -167,12 +168,13 @@ class Sketch:
         intersect_map = self.intersect_map
         for stroke in self.strokes:
             # 首先是直线
-            if stroke.type == "line":
+            if not stroke.is_curved:
                 stroke_id = stroke.id
                 # 找出所有存在交叉情况的线（这里有疑义，我觉得应该是距离小于一个数的）
-                inters = [inter_stroke.id for inter_stroke in self.strokes if (intersect_map[stroke_id][inter_stroke.id] or
-                          stroke.lineString.distance(inter_stroke.lineString) <= threshold_distance
-                                                                               and inter_stroke.id != stroke_id)]
+                inters = [inter_stroke.id for inter_stroke in self.strokes if
+                          (intersect_map[stroke_id][inter_stroke.id] or
+                           stroke.lineString.distance(inter_stroke.lineString) <= threshold_distance
+                           and inter_stroke.id != stroke_id)]
                 # 判断这些线的情况
                 for inter_id in inters:
                     if line_cluster_map[stroke_id, inter_id]:
