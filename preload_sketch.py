@@ -34,8 +34,8 @@ def preload_sketch(sketch):
     # 组成直线集群
     sketch.get_line_cluster(10.0, 20.0, 5)
     # 集群优化
-
-    # # 可视化
+    sketch.generate_line_from_cluster()
+    # 可视化
     visualize_lines(sketch)
     return cam, sketch
 
@@ -73,10 +73,10 @@ def visualize_lines(sketch):
         color = color_map.get(stroke.axis_label, 'black')
 
         # 绘制LineString
-        ax.plot(x, y, marker='o', linestyle='-', linewidth=1, color=color)
+        ax.plot(x, y, marker='', linestyle='-', linewidth=1, color=color)
 
         # 添加文本标签显示线的编号
-        ax.text(x[0], y[0], str(stroke.axis_label), fontsize=8, verticalalignment='bottom')
+        ax.text((x[0]+x[-1])/2, (y[0]+y[-1])/2, str(stroke.id), fontsize=8, verticalalignment='bottom')
 
     ax.set_aspect('equal', adjustable='box')
     plt.show()

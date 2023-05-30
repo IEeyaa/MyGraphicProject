@@ -2,13 +2,15 @@
 # @Author: IEeya
 import math
 import numpy as np
+from shapely import LineString
 
 from pylowstroke.sketch_camera import estimate_initial_camera_parameters
 from pylowstroke.sketch_vanishing_points import get_vanishing_points
+from tools.tools_cluster import get_connected_sets, fit_strokes
 
 
 class Stroke:
-    def __init__(self, stroke_id, line_string):
+    def __init__(self, line_string):
         """
         初始化Stroke对象。
 
@@ -21,7 +23,7 @@ class Stroke:
         - length：折线的长度
 
         """
-        self.id = stroke_id
+        self.id = -1
         self.lineString = line_string
         self.pointNumber = len(line_string.coords)
         self.length = self.calculate_length()
@@ -98,6 +100,10 @@ class Sketch:
 
         # 相交矩阵
         self.intersect_map = np.zeros([len(strokes), len(strokes)], dtype=np.bool_)
+        # 集群列表
+        self.line_cluster_list = None
+
+        self.update_stroke_index()
 
     def filter_strokes(self, threshold=None):
         """
@@ -129,7 +135,6 @@ class Sketch:
             self.intersect_map[stroke.id, intersects_id] = True
             self.intersect_map[intersects_id, stroke.id] = True
             self.intersect_map[stroke.id, stroke.id] = False
-        print(self.intersect_map)
 
     def delete_stroke_by_index(self, indexes):
         for index in sorted(indexes, reverse=True):
@@ -183,10 +188,21 @@ class Sketch:
                             and abs(inter_id - stroke_id) <= threshold_index:
                         line_cluster_map[stroke_id, inter_id] = True
                         line_cluster_map[inter_id, stroke_id] = True
-        for i in range(len(line_cluster_map)):
-            for j in range(len(line_cluster_map[i])):
-                if line_cluster_map[i][j]:
-                    print(f"Intersection found between Stroke {i} and Stroke {j}")
+
+        temp_cluster_list = get_connected_sets(line_cluster_map)
+        self.line_cluster_list = temp_cluster_list
+
+    def generate_line_from_cluster(self):
+        # 遍历所有的line_cluster
+        for item in reversed(self.line_cluster_list):
+            # 获取所有stroke
+            strokes = [self.strokes[index] for index in item]
+            # 合并
+            cluster_line_stroke_lineString = fit_strokes(strokes)
+            # 删除其它笔画
+            self.delete_stroke_by_index(item[1:])
+            self.strokes[item[0]].lineString = cluster_line_stroke_lineString
+        self.update_stroke_index()
 
     def get_vanishing_points(self):
         vps, p, failed = get_vanishing_points(self)
@@ -195,5 +211,4 @@ class Sketch:
     def estimate_camera(self):
         vps, p, failed = self.get_vanishing_points()
         cam_param, lines_group, vps, vp_new_ind = estimate_initial_camera_parameters(vps, p, self)
-        print(lines_group)
         return cam_param, lines_group

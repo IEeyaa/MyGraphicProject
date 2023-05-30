@@ -48,8 +48,6 @@ def get_sketch_from_image(filepath):
     # 创建存储Stroke对象的列表
     strokes = []
 
-    total_index = 0
-
     # 遍历每个polyline元素
     for index, polyline in enumerate(polyline_elements):
         # 获取polyline的点坐标信息
@@ -61,9 +59,8 @@ def get_sketch_from_image(filepath):
             y = float(coordinates[i + 1])
             points.append((x, y))
         # 创建Stroke对象并添加到列表中
-        stroke = Stroke(index, LineString(points))
+        stroke = Stroke(LineString(points))
         strokes.append(stroke)
-        total_index += 1
 
     for index_path, path_data in enumerate(path_elements):
         # 获取path的点坐标信息
@@ -72,7 +69,7 @@ def get_sketch_from_image(filepath):
         # 解析path信息，提取点坐标
         points = [(c.real, c.imag) for c in coordinates]
         # 创建Stroke对象并添加到列表中
-        stroke = Stroke(index_path + total_index, LineString(points))
+        stroke = Stroke(LineString(points))
         strokes.append(stroke)
 
     # 将信息存储到Sketch中
