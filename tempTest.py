@@ -2,7 +2,7 @@
 # @Author: IEeya
 import numpy as np
 
-from tools.tools_3d import line_line_collision
+from tools.tools_3d import find_closest_points
 
 
 def apply_hom_transform_to_points(points, hom_mat):
@@ -56,6 +56,7 @@ if __name__ == '__main__':
     # 在这里，存储了P1和P2的向量信息（出发点，以及方向向量，下面的函数用于构建P1和P2之间距离最近的两个点的位置）
     p2_reconstructed, _ = line_line_collision(reflected_p1_projective[-1], reflected_p1_projective_dir_vec,
                                               p2_lifted, p2_projective_dir_vec)
+    p3_reconstructed, _ = find_closest_points(reflected_p1_projective[-1], reflected_p1_projective_dir_vec,
+                                              p2_lifted, p2_projective_dir_vec)
     p2_reconstructed = np.array(p2_reconstructed)
     p1_reconstructed = apply_hom_transform_to_points([p2_reconstructed], refl_mat)[0]
-    print([p1_reconstructed, p2_reconstructed])

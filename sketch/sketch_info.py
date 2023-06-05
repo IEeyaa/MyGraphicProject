@@ -88,6 +88,9 @@ class Stroke:
 
         return angle_difference_degrees
 
+    def calculate_dis_different(self, stroke):
+        return self.lineString.distance(stroke.lineString)
+
 
 class Sketch:
     def __init__(self, width, height, pen_width, strokes=None):
@@ -151,7 +154,8 @@ class Sketch:
                 if stroke.id not in self.intersect_infor:
                     self.intersect_infor[stroke.id] = []
                 self.intersect_infor[stroke.id].append((Intersection(index, [stroke.id, intersect_stroke_id],
-                                                                intersect_params_info[0], intersect_params_info[1])))
+                                                                     intersect_params_info[0],
+                                                                     intersect_params_info[1])))
                 index += 1
 
     def get_stroke_neighborhood(self, stroke_id):
@@ -258,6 +262,3 @@ class Intersection:
         [2, 1, 1.5],(1线在2线上的投影情况)
         """
         self.inter_params = inter_params
-
-
-

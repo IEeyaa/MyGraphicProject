@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from camera import Camera
-from get_candidate import get_candidates_from_same_dir
+from get_candidate import get_candidates_from_same_dir, get_candidates_from_dif_dir, get_all_candidates_from_sketch
 from pylowstroke.sketch_camera import assignLineDirection
 
 
@@ -41,8 +41,7 @@ def preload_sketch(sketch):
     sketch.get_intersect_info()
 
     # 找寻candidate对：
-    candidate = get_candidates_from_same_dir(cam, sketch.strokes[9], sketch)
-    print(candidate)
+    candidate = get_all_candidates_from_sketch(sketch, cam)
     # 可视化
     visualize_lines(sketch)
     return cam, sketch

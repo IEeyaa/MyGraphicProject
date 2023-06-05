@@ -46,9 +46,9 @@ def line_segment_collision(line_p, line_dir, seg, return_axis_point=False):
             return seg[0], dist
     seg_dir /= np.linalg.norm(seg_l)
     if return_axis_point:
-        inter_p = line_line_collision(line_p, line_dir, seg_p, seg_dir)[0]
+        inter_p = find_closest_points(line_p, line_dir, seg_p, seg_dir)[0]
     else:
-        inter_p = line_line_collision(line_p, line_dir, seg_p, seg_dir)[1]
+        inter_p = find_closest_points(line_p, line_dir, seg_p, seg_dir)[1]
     a_p = inter_p - seg[0]
     a_p_l = np.linalg.norm(a_p)
     b_p = inter_p - seg[1]
@@ -97,26 +97,24 @@ def line_polyline_collision(line_p, line_dir, polyline):
     return intersections[np.argmin(distances)][0]
 
 
-# v1 and v2 should be normalized
-# returns closest points on line 1 and on line 2
-def line_line_collision(p1, v1, p2, v2):
-    v3 = np.cross(v1, v2)
-    v3 /= np.linalg.norm(v3)
+# 求解空间中两条线的最短距离
+def find_closest_points(point1, direction1, point2, direction2):
+    # 计算连线向量
+    line_vector = point2 - point1
+    direction3 = np.cross(direction1, direction2)
+    # 构建矩阵A和向量b
+    A = np.array([direction1, -direction2, direction3]).T
+    b = line_vector
+    # 求解最小二乘问题 Ax = b，其中x是参数t1和t2的向量
+    x = np.linalg.lstsq(A, b, rcond=None)[0]
+    t1 = x[0]
+    t2 = -x[1]
 
-    rhs = p2 - p1
-    lhs = np.array([v1, -v2, v3]).T
+    # 计算最近点
+    closest_point1 = point1 + t1 * direction1
+    closest_point2 = point2 + t2 * direction2
 
-    t_solutions = np.linalg.lstsq(lhs, rhs, rcond=None)
-    # t_solutions = lstsq(lhs, rhs, lapack_driver="gelsy")
-    t1 = t_solutions[0][0]
-    t2 = t_solutions[0][1]
-
-    closest_line_1 = p1 + t1 * v1
-    closest_line_2 = p2 + t2 * v2
-
-    print(p1, v1, t1, closest_line_1)
-
-    return [closest_line_1, closest_line_2]
+    return [closest_point1, closest_point2]
 
 
 # useful to get plane_u, plane_v for an ellipse
@@ -224,11 +222,9 @@ def get_reflection_mat(plane_point, plane_normal):
 
 def apply_hom_transform_to_points(points, hom_mat):
     points = np.array(points)
-    hom_points = np.ones([points.shape[0], 4])
-    hom_points[:, :-1] = points
-    transformed_points = np.dot(hom_mat, hom_points.T)
-    transformed_points = transformed_points.transpose()
-    transformed_points[:, :] /= transformed_points[:, -1][:, None]
+    transformed_points = np.concatenate((points, np.ones((points.shape[0], 1))), axis=1)
+    transformed_points = np.dot(transformed_points, hom_mat.T)
+    transformed_points /= transformed_points[:, -1][:, None]
     return transformed_points[:, :-1]
 
 
@@ -242,7 +238,7 @@ def plane_point_normal_to_equation(plane_point, plane_normal):
     return plane_equation
 
 
-#  a, b: non-parallel plane-equations
+# a, b: non-parallel plane-equations
 def plane_plane_intersection(a, b):
     u = np.cross(a[:-1], b[:-1])
     u /= np.linalg.norm(u)
@@ -335,24 +331,6 @@ def get_foreshortening_max(polyline, cam_pos):
     cam_dists = [np.linalg.norm(p - cam_pos) for p in polyline]
     foreshortening = np.max(cam_dists) - np.min(cam_dists)
     return foreshortening
-
-
-def reconstruct_two_points(p1, p2, refl_mat, camera):
-    p1_lifted = camera.lift_point(p1, 1.0)
-    p2_lifted = camera.lift_point(p2, 1.0)
-    p1_projective = np.array([camera.cam_pos, p1_lifted])
-    p2_projective = np.array([camera.cam_pos, p2_lifted])
-    p2_projective /= np.linalg.norm(p2_projective)
-    reflected_p1_projective = apply_hom_transform_to_points(p1_projective, refl_mat)
-    reflected_p1_projective_dir_vec = reflected_p1_projective[-1] - reflected_p1_projective[0]
-    reflected_p1_projective_dir_vec /= np.linalg.norm(reflected_p1_projective_dir_vec)
-    p2_projective_dir_vec = p2_projective[-1] - p2_projective[0]
-    p2_projective_dir_vec /= np.linalg.norm(p2_projective_dir_vec)
-    p2_reconstructed, _ = line_line_collision(reflected_p1_projective[-1], reflected_p1_projective_dir_vec,
-                                              p2_lifted, p2_projective_dir_vec)
-    p2_reconstructed = np.array(p2_reconstructed)
-    p1_reconstructed = apply_hom_transform_to_points([p2_reconstructed], refl_mat)[0]
-    return [p1_reconstructed, p2_reconstructed]
 
 
 # returns 2 arrays of shape (2, 3), i.e., two 3d lines
