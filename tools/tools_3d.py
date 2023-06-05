@@ -113,6 +113,9 @@ def line_line_collision(p1, v1, p2, v2):
 
     closest_line_1 = p1 + t1 * v1
     closest_line_2 = p2 + t2 * v2
+
+    print(p1, v1, t1, closest_line_1)
+
     return [closest_line_1, closest_line_2]
 
 

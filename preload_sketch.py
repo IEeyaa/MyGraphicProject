@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from camera import Camera
+from get_candidate import get_candidates_from_same_dir
 from pylowstroke.sketch_camera import assignLineDirection
 
 
@@ -22,7 +23,6 @@ def preload_sketch(sketch):
 
     # 加载相机
     cam = init_camera(sketch)
-
     # 测试，消除曲线
     curve = []
     for item in sketch.strokes:
@@ -35,6 +35,14 @@ def preload_sketch(sketch):
     sketch.get_line_cluster(10.0, 20.0, 5)
     # 集群优化
     sketch.generate_line_from_cluster()
+    # 二次计算相交关系
+    sketch.get_intersect_map()
+    # 形成相交群
+    sketch.get_intersect_info()
+
+    # 找寻candidate对：
+    candidate = get_candidates_from_same_dir(cam, sketch.strokes[9], sketch)
+    print(candidate)
     # 可视化
     visualize_lines(sketch)
     return cam, sketch

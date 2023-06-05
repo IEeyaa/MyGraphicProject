@@ -6,6 +6,7 @@ from shapely import LineString
 
 from pylowstroke.sketch_camera import estimate_initial_camera_parameters
 from pylowstroke.sketch_vanishing_points import get_vanishing_points
+from tools.tools_2d import get_projection_info
 from tools.tools_cluster import get_connected_sets, fit_strokes
 
 
@@ -100,9 +101,10 @@ class Sketch:
 
         # 相交矩阵
         self.intersect_map = np.zeros([len(strokes), len(strokes)], dtype=np.bool_)
+        # 相交交叉表
+        self.intersect_infor = dict()
         # 集群列表
         self.line_cluster_list = None
-
         self.update_stroke_index()
 
     def filter_strokes(self, threshold=None):
@@ -129,12 +131,31 @@ class Sketch:
             stroke.set_stroke_id(index)
 
     def get_intersect_map(self):
+        self.intersect_map = np.zeros([len(self.strokes), len(self.strokes)], dtype=np.bool_)
         for stroke in self.strokes:
             intersects_id = [inter.id for inter in self.strokes
                              if stroke.intersects(inter)]
             self.intersect_map[stroke.id, intersects_id] = True
             self.intersect_map[intersects_id, stroke.id] = True
             self.intersect_map[stroke.id, stroke.id] = False
+
+    def get_intersect_info(self):
+        # 生成所有的交叉情况
+        index = 0
+        for stroke in self.strokes:
+            intersect_stroke_ids = self.get_stroke_neighborhood(stroke.id)
+            # 得到所有的intersect_middle_params情况
+            for intersect_stroke_id in intersect_stroke_ids:
+                intersect_stroke = self.strokes[intersect_stroke_id]
+                intersect_params_info = get_projection_info(stroke.lineString, intersect_stroke.lineString)
+                if stroke.id not in self.intersect_infor:
+                    self.intersect_infor[stroke.id] = []
+                self.intersect_infor[stroke.id].append((Intersection(index, [stroke.id, intersect_stroke_id],
+                                                                intersect_params_info[0], intersect_params_info[1])))
+                index += 1
+
+    def get_stroke_neighborhood(self, stroke_id):
+        return [index for index, flag in enumerate(self.intersect_map[stroke_id]) if flag]
 
     def delete_stroke_by_index(self, indexes):
         for index in sorted(indexes, reverse=True):
@@ -212,3 +233,31 @@ class Sketch:
         vps, p, failed = self.get_vanishing_points()
         cam_param, lines_group, vps, vp_new_ind = estimate_initial_camera_parameters(vps, p, self)
         return cam_param, lines_group
+
+
+class Intersection:
+    def __init__(self, index, stroke_id, inter_coords, inter_params):
+        """
+        交叉对象的存储。
+
+        参数：
+        - stroke_points：表示折线的点坐标列表
+
+        Stroke对象包含以下属性：
+        - pointNumber：折线的点数量
+        - coordinates：折线的点坐标列表
+        - length：折线的长度
+
+        """
+        self.id = index
+        self.stroke_id = stroke_id
+        self.inter_coords = inter_coords
+        # 3*2，存储第一个线在第二的线的两端投影，第二个线在第二线的两端投影以及各自的mid投影
+        """
+        [1, 3, 2],(2线在1线上的投影情况)
+        [2, 1, 1.5],(1线在2线上的投影情况)
+        """
+        self.inter_params = inter_params
+
+
+
