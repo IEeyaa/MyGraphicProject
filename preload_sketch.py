@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from camera import Camera
+from gather_block import get_batch_decomposition, gather_block_from_symmetric_lines
 from get_candidate import get_candidates_from_same_dir, get_candidates_from_dif_dir, get_all_candidates_from_sketch
 from pylowstroke.sketch_camera import assignLineDirection
 
@@ -42,6 +43,11 @@ def preload_sketch(sketch):
 
     # 找寻candidate对：
     candidate = get_all_candidates_from_sketch(sketch, cam)
+    # 形成block
+    blocks = gather_block_from_symmetric_lines(candidate)
+    # 进入最终筛查
+    print(blocks)
+
     # 可视化
     visualize_lines(sketch)
     return cam, sketch

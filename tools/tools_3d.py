@@ -463,3 +463,34 @@ def rotate_angle(pts, angle):
     rot_mat = np.array([[np.cos(angle), -np.sin(angle)],
                         [np.sin(angle), np.cos(angle)]])
     return np.matmul(rot_mat, pts.T).T
+
+
+def calculate_intersection(matrix_p, matrix_q):
+    # 提取矩阵p中的三个点
+    p1, p2, p3 = matrix_p
+
+    # 提取矩阵q中的三个点
+    q1, q2, q3 = matrix_q
+
+    # 构建点p1-p2-p3的平面向量
+    v1 = p2 - p1
+    v2 = p3 - p1
+
+    # 计算点p1-p2-p3的法向量
+    normal_vector = np.cross(v1, v2)
+    normal_vector /= np.linalg.norm(normal_vector)
+
+    # 构建点q1-q2-q3的平面向量
+    w1 = q2 - q1
+    w2 = q3 - q1
+
+    # 计算点q1-q2-q3的法向量
+    normal_vector_q = np.cross(w1, w2)
+    normal_vector_q /= np.linalg.norm(normal_vector_q)
+
+    plane1 = Plane(p1, normal_vector)
+    plane2 = Plane(p2, normal_vector_q)
+
+    intersection_line = plane1.intersect_plane(plane2)
+
+    return intersection_line
