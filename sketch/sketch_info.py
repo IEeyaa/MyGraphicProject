@@ -6,7 +6,7 @@ from shapely import LineString
 
 from pylowstroke.sketch_camera import estimate_initial_camera_parameters
 from pylowstroke.sketch_vanishing_points import get_vanishing_points
-from tools.tools_2d import get_projection_info
+from tools.tools_2d import get_intersection_info
 from tools.tools_cluster import get_connected_sets, fit_strokes
 
 
@@ -150,7 +150,7 @@ class Sketch:
             # 得到所有的intersect_middle_params情况
             for intersect_stroke_id in intersect_stroke_ids:
                 intersect_stroke = self.strokes[intersect_stroke_id]
-                intersect_params_info = get_projection_info(stroke.lineString, intersect_stroke.lineString)
+                intersect_params_info = get_intersection_info(stroke.lineString, intersect_stroke.lineString)
                 if stroke.id not in self.intersect_infor:
                     self.intersect_infor[stroke.id] = []
                 self.intersect_infor[stroke.id].append((Intersection(index, [stroke.id, intersect_stroke_id],
@@ -256,9 +256,4 @@ class Intersection:
         self.id = index
         self.stroke_id = stroke_id
         self.inter_coords = inter_coords
-        # 3*2，存储第一个线在第二的线的两端投影，第二个线在第二线的两端投影以及各自的mid投影
-        """
-        [1, 3, 2],(2线在1线上的投影情况)
-        [2, 1, 1.5],(1线在2线上的投影情况)
-        """
         self.inter_params = inter_params

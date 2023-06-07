@@ -41,11 +41,11 @@ def get_candidates_from_same_dir(cam, stroke, sketch):
 
     intersect_infos = sketch.intersect_infor[stroke.id]
     intersect_params_info = []
-    # 得到所有的intersect_middle_params情况
+    # 得到所有的intersect_params情况
     for intersect_info in intersect_infos:
         intersect_stroke_id = intersect_info.stroke_id[1]
         intersect_params_info.append(
-            [intersect_stroke_id, intersect_info.inter_coords[0], intersect_info.inter_params[2]])
+            [intersect_stroke_id, intersect_info.inter_coords, intersect_info.inter_params[0]])
 
     left_side = []
     right_side = []
@@ -102,7 +102,6 @@ def get_candidates_from_same_dir(cam, stroke, sketch):
             stroke.id, stroke.id,
             answer, answer,
             main_axis,
-            -1, -1,
             item[0][0], item[1][0]
         ])
 
@@ -192,7 +191,6 @@ def get_candidates_from_dif_dir(cam, vp_dir, axis_dir, sketch):
                 item[0].id, item[1].id,
                 final_line_1, final_line_2,
                 vp_dir,
-                -1, -1,
                 -1, -1,
             ])
 
