@@ -83,3 +83,78 @@ def fit_strokes(strokes):
         snd_point = aggr_line[np.argmin(dists_min)]
         aggregated_lines = LineString(np.array([first_point, snd_point]))
     return aggregated_lines
+
+
+# 对3D的所有重建进行聚合，返回各个区域的聚合结果
+# candidate[5]要记录的是当前的candidate_id在stroke_id中参与了哪几个编号组的重建
+def cluster_3d_lines_correspondence(
+    candidates,
+    stroke_groups,
+    sketch,
+):
+    # 遍历所有的stroke
+    candidates_of_group = [[] for i in range(0, len(sketch.strokes))]
+
+    for stroke in sketch.strokes:
+        # 记录重建情况,代表当前stroke所有重建candidate的参与情况
+        candidate_belong = [[] for i in candidates]
+        stroke_id = stroke.id
+        # 获取所有的重建
+        stroke_3d_constructions = []
+        for candidates_id, item in enumerate(candidates):
+            if stroke_id == item[0]:
+                stroke_3d_constructions.append([candidates_id, item[2]])
+            elif stroke_id == item[1]:
+                stroke_3d_constructions.append([candidates_id, item[3]])
+        # 对所有的重建进行判断,先定义threshold以及每隔0.1的区间,并且考虑到大部分的线是近似平行的，因此可以直接用起点进行判断
+        all_lines = [line[1] for line in stroke_3d_constructions]
+        if len(all_lines) == 0:
+            continue
+        if len(all_lines) == 1:
+            stroke_groups[stroke_id] = [stroke_3d_constructions[0][1]]
+            candidate_belong[stroke_3d_constructions[0][0]].append(0)
+        else:
+            points_0 = np.array([line[0] for line in all_lines])
+            points_1 = np.array([line[1] for line in all_lines])
+            threshold = 0.1 * np.max([np.linalg.norm(points_0[i] - points_1[i]) for i in range(0, len(points_0))])
+            all_sp = [line[1][0] for line in stroke_3d_constructions]
+            sp_dir = all_sp[1] - all_sp[0]
+            sp_dir /= np.linalg.norm(sp_dir)
+            sp_projective = np.dot(all_sp, sp_dir)
+
+            # 所有起点中的最近点
+            start_sp = np.min(sp_projective, axis=0)
+            # 所有起点中的最远点
+            end_sp = np.max(sp_projective, axis=0)
+            tmp_sp = start_sp
+            cluster_line_number = 0
+            while tmp_sp < end_sp:
+                group_lines = []
+                for sp_id, sp in enumerate(sp_projective):
+                    if tmp_sp - threshold < sp < tmp_sp + threshold:
+                        group_lines.append(stroke_3d_constructions[sp_id][1])
+                        candidate_belong[stroke_3d_constructions[sp_id][0]].append(cluster_line_number)
+
+                        if len(candidates_of_group[stroke_id]) <= cluster_line_number:
+                            candidates_of_group[stroke_id].append([])
+                        candidates_of_group[stroke_id][cluster_line_number].append([stroke_3d_constructions[sp_id][0],
+                                                                                    abs(tmp_sp - sp)])
+                if len(group_lines) >= 1:
+                    points_0 = np.array([line[0] for line in group_lines])
+                    points_1 = np.array([line[1] for line in group_lines])
+                    cluster_line = [np.mean(points_0, axis=0), np.mean(points_1, axis=0)]
+                    # 形成一个新的group
+                    stroke_groups[stroke_id].append(cluster_line)
+                    cluster_line_number += 1
+                tmp_sp += threshold
+        # 将信息保存到所有重建中
+        for candidates_id, item in enumerate(candidates):
+            if stroke_id == item[0]:
+                candidates[candidates_id][5] = candidate_belong[candidates_id]
+            if stroke_id == item[1]:
+                candidates[candidates_id][6] = candidate_belong[candidates_id]
+    return candidates_of_group
+
+
+
+

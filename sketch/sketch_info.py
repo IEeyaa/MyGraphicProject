@@ -2,12 +2,16 @@
 # @Author: IEeya
 import math
 import numpy as np
-from shapely import LineString
+from matplotlib.collections import LineCollection
+from shapely import LineString, Point, STRtree
 
 from pylowstroke.sketch_camera import estimate_initial_camera_parameters
 from pylowstroke.sketch_vanishing_points import get_vanishing_points
 from tools.tools_2d import get_intersection_info
 from tools.tools_cluster import get_connected_sets, fit_strokes
+
+from matplotlib import pylab as pl, pyplot as plt
+import tools.sketch_tools as Tools
 
 
 class Stroke:
@@ -91,6 +95,29 @@ class Stroke:
     def calculate_dis_different(self, stroke):
         return self.lineString.distance(stroke.lineString)
 
+    def get_line_display_data(self, color_data, linewidth_data):
+        segs = []
+        lws = []
+        col = []
+        points_list = self.lineString.coords
+        for i in range(len(points_list) - 1):
+            p1 = points_list[i]
+            p2 = points_list[i + 1]
+            segs.append([p1, p2])
+
+            if color_data is not None:
+                c = np.mean([color_data(p1), color_data(p2)])
+                col.append(c)
+
+            if linewidth_data is not None:
+                try:
+                    l = 1.0
+                except KeyError:
+                    l = 1.0
+                lws.append(l)
+
+        return segs, lws, col
+
 
 class Sketch:
     def __init__(self, width, height, pen_width, strokes=None):
@@ -105,7 +132,11 @@ class Sketch:
         # 相交矩阵
         self.intersect_map = np.zeros([len(strokes), len(strokes)], dtype=np.bool_)
         # 相交交叉表
-        self.intersect_infor = dict()
+        self.intersect_dict = dict()
+        # 相交列表
+        self.intersect_infor = []
+        # 相交邻接表
+        self.intersect_neighbor = dict()
         # 集群列表
         self.line_cluster_list = None
         self.update_stroke_index()
@@ -151,12 +182,29 @@ class Sketch:
             for intersect_stroke_id in intersect_stroke_ids:
                 intersect_stroke = self.strokes[intersect_stroke_id]
                 intersect_params_info = get_intersection_info(stroke.lineString, intersect_stroke.lineString)
-                if stroke.id not in self.intersect_infor:
-                    self.intersect_infor[stroke.id] = []
-                self.intersect_infor[stroke.id].append((Intersection(index, [stroke.id, intersect_stroke_id],
-                                                                     intersect_params_info[0],
-                                                                     intersect_params_info[1])))
+                if stroke.id not in self.intersect_dict:
+                    self.intersect_dict[stroke.id] = []
+                self.intersect_infor.append((Intersection(index, [stroke.id, intersect_stroke_id],
+                                                          intersect_params_info[0],
+                                                          intersect_params_info[1])))
+                self.intersect_dict[stroke.id].append(index)
                 index += 1
+
+    def get_adjacent_intersections(self):
+        intersections = self.intersect_infor
+        points = [Point(inter.inter_coords) for inter in intersections]
+        points_inter_ids = [inter.id for inter in intersections]
+        index_by_id = {i: points_inter_ids[i] for i, _ in enumerate(intersections)}
+        tree = STRtree(points)
+
+        for inter in intersections:
+            inter_id = inter.id
+            query_geom = points[inter_id].buffer(10)
+            inter_neighbours = [inter_p for inter_p in tree.query(query_geom)
+                                if query_geom.intersects(points[inter_p]) and
+                                np.sum(np.in1d(intersections[index_by_id[inter_p]].stroke_id,
+                                               inter.stroke_id)) > 0]
+            self.intersect_infor[inter_id].adjacent_inter_ids = inter_neighbours
 
     def get_stroke_neighborhood(self, stroke_id):
         return [index for index, flag in enumerate(self.intersect_map[stroke_id]) if flag]
@@ -238,6 +286,59 @@ class Sketch:
         cam_param, lines_group, vps, vp_new_ind = estimate_initial_camera_parameters(vps, p, self)
         return cam_param, lines_group
 
+    def display_strokes_2(self,
+                          fig=None, ax=None,
+                          color_process=lambda s: "red",
+                          linewidth_data= 1,
+                          linewidth_process=None,
+                          use_cmap=False,
+                          cmap=pl.cm.jet,
+                          norm_global=True,
+                          # display_interval is useful when we want to partially
+                          # plot the sketch
+                          display_strokes=[]):
+        """
+        process color based on stroke properties
+        """
+        if fig == None or ax == None:
+            fig, ax = plt.subplots()
+            ax.set_xlim(0, self.width)
+            ax.set_ylim(self.height, 0)
+        mn = np.inf
+        mx = -np.inf
+
+        display_data = []
+        for s in self.strokes:
+            (seg, lws, col) = s.get_line_display_data(None, linewidth_data)
+            if color_process != None: col = color_process(s)
+            if linewidth_data == None: lws = [s.width]
+            if linewidth_process != None: lws = linewidth_process(lws)
+            if use_cmap:
+                colmin = np.min(col)
+                colmax = np.max(col)
+                if colmin < mn: mn = colmin
+                if colmax > mx: mx = colmax
+            display_data.append((seg, lws, col))
+
+        if use_cmap:
+            # normalize over all strokes
+            colors = [d[2] for d in display_data]
+            if norm_global:
+                col_data = Tools.normalize_list(colors, mn, mx)
+            else:
+                col_data = Tools.normalize_list(colors)
+            colors = cmap(col_data)
+            # get color data back in display_data
+            display_data = [(d[0], d[1], colors[d_id]) for d_id, d in enumerate(display_data)]
+
+        if len(display_strokes) == 0:
+            display_strokes = list(range(len(self.strokes)))
+        for d_stroke_id in display_strokes:
+            d = display_data[d_stroke_id]
+            col = d[2]
+            lc = LineCollection(d[0], linewidths=lws, colors=col, antialiaseds=True)
+            ax.add_collection(lc)
+
 
 class Intersection:
     def __init__(self, index, stroke_id, inter_coords, inter_params):
@@ -257,3 +358,28 @@ class Intersection:
         self.stroke_id = stroke_id
         self.inter_coords = inter_coords
         self.inter_params = inter_params
+        self.adjacent_inter_ids = None
+
+
+class Intersection3D:
+    def __init__(self, index, stroke_id, inter_coords):
+        """
+        交叉对象的存储。
+
+        参数：
+        - stroke_points：表示折线的点坐标列表
+
+        Stroke对象包含以下属性：
+        - pointNumber：折线的点数量
+        - coordinates：折线的点坐标列表
+        - length：折线的长度
+
+        """
+        self.id = index
+        self.stroke_id = stroke_id
+        self.inter_coords = inter_coords
+        self.inter_coords_3d = None
+        self.camera_depth = None
+        self.adjacent_inter_ids = None
+
+

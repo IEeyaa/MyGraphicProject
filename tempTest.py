@@ -3,6 +3,7 @@
 import numpy as np
 
 from tools.tools_3d import find_closest_points
+from ortools.linear_solver import pywraplp
 
 
 def apply_hom_transform_to_points(points, hom_mat):
@@ -34,29 +35,33 @@ def get_reflection_mat(plane_point, plane_normal):
 
 
 if __name__ == '__main__':
-    sym_plane_point = np.zeros(3, dtype=np.float_)
-    sym_plane_normal = np.zeros(3, dtype=np.float_)
-    sym_plane_normal[0] = 1.0
-    refl_mat = get_reflection_mat(sym_plane_point, sym_plane_normal)
+    # 创建求解器
+    solver = pywraplp.Solver.CreateSolver('SCIP')
 
-    p1_lifted = (5.0, 0.0, 0.0)
-    p2_lifted = (3.0, 4.0, 0.0)
-    cam_pos = (1.0, 1.0, 2.0)
+    # 定义变量
+    x = solver.IntVar(0, 10, 'x')
+    y = solver.IntVar(0, 10, 'y')
 
-    p1_projective = np.array([cam_pos, p1_lifted])
-    reflected_p1_projective = apply_hom_transform_to_points(p1_projective, refl_mat)
-    reflected_p1_projective_dir_vec = reflected_p1_projective[-1] - reflected_p1_projective[0]
-    reflected_p1_projective_dir_vec /= np.linalg.norm(reflected_p1_projective_dir_vec)
+    # 定义约束条件
+    solver.Add(1 <= x+2*y <= 5)
 
-    p2_projective = np.array([cam_pos, p2_lifted])
-    p2_projective /= np.linalg.norm(p2_projective)
-    p2_projective_dir_vec = p2_projective[-1] - p2_projective[0]
-    p2_projective_dir_vec /= np.linalg.norm(p2_projective_dir_vec)
+    solver.Add(0 <= 3*x-y <= 10)
 
-    # 在这里，存储了P1和P2的向量信息（出发点，以及方向向量，下面的函数用于构建P1和P2之间距离最近的两个点的位置）
-    p2_reconstructed, _ = line_line_collision(reflected_p1_projective[-1], reflected_p1_projective_dir_vec,
-                                              p2_lifted, p2_projective_dir_vec)
-    p3_reconstructed, _ = find_closest_points(reflected_p1_projective[-1], reflected_p1_projective_dir_vec,
-                                              p2_lifted, p2_projective_dir_vec)
-    p2_reconstructed = np.array(p2_reconstructed)
-    p1_reconstructed = apply_hom_transform_to_points([p2_reconstructed], refl_mat)[0]
+    if x <= y:
+        final_score = x + y
+    else:
+        final_score = 2*x + 5*y
+    # 定义目标函数
+    solver.Maximize(final_score)
+
+    # 求解问题
+    status = solver.Solve()
+
+    print(solver.Objective().Value())
+    if status == pywraplp.Solver.OPTIMAL:
+        print('最优解已找到')
+        print('目标函数值 =', final_score)
+        print('x 的值 =', x.solution_value())
+        print('y 的值 =', y.solution_value())
+    else:
+        print('求解器未找到最优解。')

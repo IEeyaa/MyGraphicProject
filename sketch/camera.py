@@ -54,7 +54,7 @@ class Camera:
     def lift_point_close_to_line(self, p, line_p, line_v, return_axis_point=False):
         lifted_point, camera_point_ray = self.get_camera_point_ray(p)
         closest_point_axis, closest_point_lifted_sketch = \
-            tools_3d.find_closest_points(line_p, line_v, lifted_point, camera_point_ray)
+            tools_3d.line_line_collision(line_p, line_v, lifted_point, camera_point_ray)
         if return_axis_point:
             return closest_point_lifted_sketch, closest_point_axis
         return closest_point_lifted_sketch

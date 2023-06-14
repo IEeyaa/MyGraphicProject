@@ -6,11 +6,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from camera import Camera
-from gather_block import gather_block_from_symmetric_lines
-from get_candidate import get_candidates_from_same_dir, get_candidates_from_dif_dir, get_all_candidates_from_sketch
+from sketch.camera import Camera
 from pylowstroke.sketch_camera import assignLineDirection
-from select_candidate import select_best_candidates
 
 
 def init_camera(sketch):
@@ -41,17 +38,9 @@ def preload_sketch(sketch):
     sketch.get_intersect_map()
     # 形成相交群
     sketch.get_intersect_info()
+    # 形成邻接表
+    sketch.get_adjacent_intersections()
 
-    # 找寻candidate对：
-    candidate = get_all_candidates_from_sketch(sketch, cam)
-    # 形成block
-    blocks= gather_block_from_symmetric_lines(candidate)
-    # 进入最终筛查
-    print(blocks)
-    final_answer = select_best_candidates(cam, sketch, candidate, blocks)
-
-    # 可视化
-    visualize_lines(sketch)
     return cam, sketch
 
 
@@ -72,26 +61,26 @@ def get_camera(sketch):
     return cam
 
 
-def visualize_lines(sketch):
-    fig, ax = plt.subplots()
-    strokes = sketch.strokes
+def visualize_lines(line_datas):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
 
-    # 定义颜色映射
-    color_map = {0: 'red', 1: 'blue', 2: 'green', 3: 'orange', 4: 'purple'}
+    # 绘制线段
+    for line_data in line_datas:
+        for i in range(len(line_data) - 1):
+            start_point = line_data[i]
+            end_point = line_data[i + 1]
+            ax.plot([start_point[0], end_point[0]], [start_point[1], end_point[1]], [start_point[2], end_point[2]])
 
-    for stroke in strokes:
-        # 将LineString的坐标提取为NumPy数组形式
-        line_string = stroke.lineString
-        x, y = zip(*line_string.coords)
+    # 设置坐标轴范围
+    ax.set_xlim([0, 4])
+    ax.set_ylim([0, 4])
+    ax.set_zlim([0, 4])
 
-        # 根据axis_label选择颜色
-        color = color_map.get(stroke.axis_label, 'black')
+    # 设置坐标轴标签
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
 
-        # 绘制LineString
-        ax.plot(x, y, marker='', linestyle='-', linewidth=1, color=color)
-
-        # 添加文本标签显示线的编号
-        ax.text((x[0]+x[-1])/2, (y[0]+y[-1])/2, str(stroke.id), fontsize=8, verticalalignment='bottom')
-
-    ax.set_aspect('equal', adjustable='box')
+    # 显示图形
     plt.show()

@@ -4,8 +4,8 @@
 import numpy as np
 from scipy.spatial import ConvexHull
 from shapely import Polygon, LineString, MultiLineString
-from tools.tools_3d import apply_hom_transform_to_points, get_reflection_mat, find_closest_points, \
-    calculate_intersection, line_3d_length
+from tools.tools_3d import apply_hom_transform_to_points, get_reflection_mat, line_line_collision, line_3d_length, \
+    calculate_intersection
 
 # 分组
 param_middle = 0.5
@@ -39,10 +39,11 @@ def get_candidates_from_same_dir(cam, stroke, sketch):
     # 获取
     main_axis = stroke.axis_label
 
-    intersect_infos = sketch.intersect_infor[stroke.id]
+    intersect_infos = sketch.intersect_dict[stroke.id]
     intersect_params_info = []
     # 得到所有的intersect_params情况
-    for intersect_info in intersect_infos:
+    for intersect_info_id in intersect_infos:
+        intersect_info = sketch.intersect_infor[intersect_info_id]
         intersect_stroke_id = intersect_info.stroke_id[1]
         intersect_params_info.append(
             [intersect_stroke_id, intersect_info.inter_coords, intersect_info.inter_params[0]])
@@ -86,7 +87,7 @@ def get_candidates_from_same_dir(cam, stroke, sketch):
         # 归一化
         reflected_p1_projective_dir /= np.linalg.norm(reflected_p1_projective_dir)
         # 找到rC rp1直线与C, p2直线的最佳交点
-        answer = find_closest_points(reflected_p1_projective[1], reflected_p1_projective_dir,
+        answer = line_line_collision(reflected_p1_projective[1], reflected_p1_projective_dir,
                                      p2_projective[1], p2_projective_dir)
         # 针对重建的p2点，对称回来，得到重建的p1点
         res_p2 = answer[0]
@@ -95,13 +96,14 @@ def get_candidates_from_same_dir(cam, stroke, sketch):
         res_dir = res_p2 - res_p1
         res_dir /= np.linalg.norm(res_dir)
         # 与原直线求最近端点
-        answer = cam.lift_polyline_close_to_line(
+        answer = np.array(cam.lift_polyline_close_to_line(
             [np.array(stroke.lineString.coords[0]), np.array(stroke.lineString.coords[-1])],
-            res_p1, res_dir)
+            res_p1, res_dir))
         candidates_3d.append([
             stroke.id, stroke.id,
             answer, answer,
             main_axis,
+            -1, -1,
             item[0][0], item[1][0]
         ])
 
@@ -176,7 +178,6 @@ def get_candidates_from_dif_dir(cam, vp_dir, axis_dir, sketch):
         inter_line_2_dir = inter_line_2[-1] - inter_line_2[0]
         inter_line_2_dir /= np.linalg.norm(inter_line_2_dir)
 
-        # 与不知道tm什么玩意重构
         final_line_1 = cam.lift_polyline_close_to_line(
             [np.array(item[0].lineString.coords[0]), np.array(item[0].lineString.coords[-1])],
             inter_line_1[0], inter_line_1_dir)
@@ -191,6 +192,7 @@ def get_candidates_from_dif_dir(cam, vp_dir, axis_dir, sketch):
                 item[0].id, item[1].id,
                 final_line_1, final_line_2,
                 vp_dir,
+                -1, -1,
                 -1, -1,
             ])
 

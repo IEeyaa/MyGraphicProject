@@ -78,4 +78,4 @@ def get_sketch_from_image(filepath):
 
 
 if __name__ == '__main__':
-    sketch = get_sketch_from_image("./data/sketch.svg")
+    sketch = get_sketch_from_image("../data/sketch.svg")
