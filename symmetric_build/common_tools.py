@@ -3,7 +3,7 @@ from skspatial.objects import Plane
 from scipy.spatial import distance
 from shapely.geometry import LineString
 
-from sketch.intersections import get_intersections_scale_factors
+from sketch.intersections import get_intersections_scale_factors, get_intersections_scale_factors_fixed_strokes
 from tools import tools_3d
 
 
@@ -102,6 +102,11 @@ def get_planes_scale_factors(sketch, camera, batch, batch_id, selected_planes, f
                 sketch, camera, batch=batch)
             # print(scale_factors)
         # filter intersection outliers
+        else:
+            tmp_max_scale_factor_modes = 3
+            intersections_3d, scale_factors = get_intersections_scale_factors_fixed_strokes(
+                per_axis_per_stroke_candidate_reconstructions, fixed_strokes, batch, plane_id,
+                sketch, camera)
         median_scale_factor = np.median(scale_factors)
         del_scale_factors = [i for i, scale_factor in enumerate(scale_factors)
                              if scale_factor < 0.5 * median_scale_factor or scale_factor > 1.5 * median_scale_factor]
@@ -207,11 +212,10 @@ def copy_correspondences_batch(correspondences, batch, fixed_strokes, refl_mats,
             s_0_refl = tools_3d.apply_hom_transform_to_points(s_0, refl_mats[corr[4]])
             s_0_refl_resampled = equi_resample_polyline(s_0_refl, 0.1 * tools_3d.line_3d_length(s_0_refl))
             s_0_proj = np.array(camera.project_polyline(s_0_refl_resampled))
-            s_1 = np.array([p.coords for p in sketch.strokes[s_id_1].points_list])
+            s_1 = sketch.strokes[s_id_1].lineString
             # dist = np.min(distance.cdist(s_0_proj, s_1))
-            dist = LineString(s_0_proj).distance(LineString(s_1))
-            if dist < 2 * max(sketch.strokes[s_id_0].acc_radius,
-                              sketch.strokes[s_id_1].acc_radius):
+            dist = LineString(s_0_proj).distance(s_1)
+            if dist < 2 * 5:
                 batch_correspondences.append([corr[0], corr[1],
                                               np.array(fixed_strokes[s_id_0]),
                                               camera.cam_pos + tmp_planes_scale_factors[corr[4]] * (
@@ -225,11 +229,9 @@ def copy_correspondences_batch(correspondences, batch, fixed_strokes, refl_mats,
             s_1_refl = tools_3d.apply_hom_transform_to_points(s_1, refl_mats[corr[4]])
             s_1_refl_resampled = equi_resample_polyline(s_1_refl, 0.1 * tools_3d.line_3d_length(s_1_refl))
             s_1_proj = np.array(camera.project_polyline(s_1_refl_resampled))
-            s_0 = np.array([p.coords for p in sketch.strokes[s_id_0].points_list])
-            dist = LineString(s_0).distance(LineString(s_1_proj))
-            hauss_dist = LineString(s_0).hausdorff_distance(LineString(s_1_proj))
-            if dist < 2 * max(sketch.strokes[s_id_0].acc_radius,
-                              sketch.strokes[s_id_1].acc_radius):
+            s_0 = sketch.strokes[s_id_0].lineString
+            dist = s_0.distance(LineString(s_1_proj))
+            if dist < 2 * 5:
                 batch_correspondences.append([corr[0], corr[1],
                                               camera.cam_pos + tmp_planes_scale_factors[corr[4]] * (
                                                       np.array(corr[2]) - camera.cam_pos),

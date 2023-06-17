@@ -151,6 +151,7 @@ def angle_line_line(l1, l2):
         return 0.0
     return acos(np.abs(np.dot(norm_vec_1, norm_vec_2)))
 
+
 def line_3d_length(polyline):
     l = np.array(polyline)
     if len(l.shape) < 2:
@@ -331,16 +332,17 @@ def reconstruct_two_points(p1, p2, refl_mat, camera):
     p1_reconstructed = apply_hom_transform_to_points([p2_reconstructed], refl_mat)[0]
     return [p1_reconstructed, p2_reconstructed]
 
+
 # returns 2 arrays of shape (2, 3), i.e., two 3d lines
 def reconstruct_symmetric_strokes_straight(s_1, s_2, sym_plane_point, sym_plane_normal, camera):
 
     refl_mat = get_reflection_mat(sym_plane_point, sym_plane_normal)
     stroke_triangle = np.array([camera.cam_pos,
-                                np.array(camera.lift_point(s_1.points_list[0].coords, 20.0)),
-                                np.array(camera.lift_point(s_1.points_list[-1].coords, 20.0))])
+                                np.array(camera.lift_point(s_1.lineString.coords[0], 20.0)),
+                                np.array(camera.lift_point(s_1.lineString.coords[-1], 20.0))])
     other_stroke_triangle = np.array([camera.cam_pos,
-                                      np.array(camera.lift_point(s_2.points_list[0].coords, 20.0)),
-                                      np.array(camera.lift_point(s_2.points_list[-1].coords, 20.0))])
+                                      np.array(camera.lift_point(s_2.lineString.coords[0], 20.0)),
+                                      np.array(camera.lift_point(s_2.lineString.coords[-1], 20.0))])
     reflected_stroke_triangle = apply_hom_transform_to_points(stroke_triangle, refl_mat)
     # intersection between both triangles
     first_triangle_point = reflected_stroke_triangle[0]
@@ -367,13 +369,14 @@ def reconstruct_symmetric_strokes_straight(s_1, s_2, sym_plane_point, sym_plane_
     reflected_line = apply_hom_transform_to_points(np.array([line_a, line_b]), refl_mat)
     reflected_line_dir = reflected_line[-1] - reflected_line[0]
     reflected_line_dir /= np.linalg.norm(reflected_line_dir)
-    inter_line = np.array(camera.lift_polyline_close_to_line([s_2.points_list[0].coords,
-                                                              s_2.points_list[-1].coords],
+    inter_line = np.array(camera.lift_polyline_close_to_line([s_2.lineString.coords[0],
+                                                              s_2.lineString.coords[-1]],
                                                              line_a, plane_inter_dir))
-    final_line = np.array(camera.lift_polyline_close_to_line([s_1.points_list[0].coords,
-                                                              s_1.points_list[-1].coords],
+    final_line = np.array(camera.lift_polyline_close_to_line([s_1.lineString.coords[0],
+                                                              s_1.lineString.coords[-1]],
                                                              reflected_line[0], reflected_line_dir))
     return final_line, inter_line
+
 
 def chamfer_distance(x, y, metric='l2', direction='bi', return_pointwise_distances=False):
     """Chamfer distance between two point clouds

@@ -221,6 +221,7 @@ def remove_unlikely_intersections(sketch):
     sketch.intersection_graph.remove_intersections(unlikely_inter_ids)
 
 
+# 每一条线的前后端点
 def get_intersection_arc_parameters(sketch):
     # for the line-coverage part of the score function, we need the arc_distance for
     # the two most extreme intersections for each stroke
@@ -275,8 +276,6 @@ def get_line_coverages_simple(intersections_3d, sketch, extreme_distances):
             inter_id=inter.inter_id,
             stroke_ids=inter.stroke_ids,
             weight=weight_1))
-        # if 5 in inter.stroke_ids:
-        #    print(inter.stroke_ids, weight_0, weight_1, inter.inter_id)
     return line_coverages
 
 
@@ -286,7 +285,6 @@ def get_intersections_simple_batch(per_stroke_proxies, sketch, camera,
 
     simple_intersections = []
     intersections = sketch.intersect_infor
-
     for inter in intersections:
         # attribute telling us if one of the strokes is fixed
         inter.is_fixed = False
@@ -320,7 +318,6 @@ def get_intersections_simple_batch(per_stroke_proxies, sketch, camera,
                 p = np.array(p)
                 # lengths[0] 存储了inter.stroke_id[0]的所有可能长度，lengths[1]同理
                 lengths[vec_id].append(tools_3d.line_3d_length(p))
-
                 lifted_inter = camera.lift_point_close_to_polyline_v3(inter.inter_coords, p)
 
                 if lifted_inter is not None:
@@ -417,19 +414,19 @@ def get_intersections_scale_factors_fixed_strokes(
         aligned_plane_id, sketch, camera):
     scale_factors = []
     intersections_3d = []
-    for inter in sketch.intersection_graph.get_intersections():
-        if inter.stroke_ids[0] > batch[1] or inter.stroke_ids[1] > batch[1]:
+    for inter in sketch.intersect_infor:
+        if inter.stroke_id[0] > batch[1] or inter.stroke_id[1] > batch[1]:
             continue
         stroke_id_0 = -1
         stroke_id_1 = -1
-        if (len(fixed_strokes[inter.stroke_ids[0]]) > 0 and \
-                len(fixed_strokes[inter.stroke_ids[1]]) == 0):  # and \
-            stroke_id_0 = inter.stroke_ids[0]
-            stroke_id_1 = inter.stroke_ids[1]
-        elif (len(fixed_strokes[inter.stroke_ids[1]]) > 0 and \
-              len(fixed_strokes[inter.stroke_ids[0]]) == 0):  # and \
-            stroke_id_0 = inter.stroke_ids[1]
-            stroke_id_1 = inter.stroke_ids[0]
+        if (len(fixed_strokes[inter.stroke_id[0]]) > 0 and \
+                len(fixed_strokes[inter.stroke_id[1]]) == 0):  # and \
+            stroke_id_0 = inter.stroke_id[0]
+            stroke_id_1 = inter.stroke_id[1]
+        elif (len(fixed_strokes[inter.stroke_id[1]]) > 0 and \
+              len(fixed_strokes[inter.stroke_id[0]]) == 0):  # and \
+            stroke_id_0 = inter.stroke_id[1]
+            stroke_id_1 = inter.stroke_id[0]
         else:
             continue
         s_0 = fixed_strokes[stroke_id_0]
@@ -471,7 +468,7 @@ def get_intersections_scale_factors_fixed_strokes(
             scale_factor = inter_3d_0_cam_dist / inter_3d_1_cam_dist
             scale_factors.append(scale_factor)
             intersections_3d.append(
-                Intersection3d(inter_id=inter.inter_id,
+                Intersection3d(inter_id=inter.id,
                                inter_3d=inter_3d_0,
                                stroke_ids=[stroke_id_0, stroke_id_1],
                                stroke_candidates=[s_0, s_1]))

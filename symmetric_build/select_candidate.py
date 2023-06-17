@@ -27,7 +27,7 @@ def select_best_candidates(cam, sketch, candidates, blockes):
         plane_scale_factor = get_scale_factor_for_each_plane(cam, candidates_info, sketch)
 
 
-def gather_construction_from_dif_direction_per_block(candidates, block):
+def gather_construction_from_dif_direction_per_block(candidates, block, fixed_strokes):
     """
         :param candidates: 待筛选的所有候选对称对
         :param block:       当前处理的block
@@ -36,13 +36,21 @@ def gather_construction_from_dif_direction_per_block(candidates, block):
     candidates_info = [{}, {}, {}]
     for item in candidates:
         if item[0] in candidates_info[item[4]].keys():
-            candidates_info[item[4]][item[0]].append(item[2])
+            if len(fixed_strokes[item[0]]) > 0:
+                if not len(candidates_info[item[4]][item[0]]) > 0:
+                    candidates_info[item[4]][item[0]] = [fixed_strokes[item[0]]]
+            else:
+                candidates_info[item[4]][item[0]].append(item[2])
         else:
             candidates_info[item[4]][item[0]] = [item[2]]
         if item[0] == item[1]:
             continue
         if item[1] in candidates_info[item[4]].keys():
-            candidates_info[item[4]][item[1]].append(item[3])
+            if len(fixed_strokes[item[1]]) > 0:
+                if not len(candidates_info[item[4]][item[1]]) > 0:
+                    candidates_info[item[4]][item[1]] = [fixed_strokes[item[1]]]
+            else:
+                candidates_info[item[4]][item[1]].append(item[3])
         else:
             candidates_info[item[4]][item[1]] = [item[3]]
     return candidates_info

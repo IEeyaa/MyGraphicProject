@@ -76,8 +76,6 @@ def sketch_plot(sketch, VERBOSE=False):
     fig, axes = get_sketch_fig(sketch)
     sketch.display_strokes_2(fig=fig, ax=axes, norm_global=True,
         color_process=lambda s: "black", linewidth_data=lambda s:3)
-        #color_process = lambda s:s.get_data("pressure"))
-        #linewidth_process=lambda p: p.get_data("pressure"))
     plot_end(sketch, fig, axes, "input", VERBOSE=VERBOSE, with_sketch_limits=True)
 
 def clean_folder(folder):
@@ -88,6 +86,7 @@ def clean_folder(folder):
                 os.remove(os.path.join(folder, item))
     else:
         os.mkdir(folder)
+
 
 def sketch_plot_successive(sketch, folder):
 
@@ -149,7 +148,7 @@ def vanishing_points(sketch, cam, VERBOSE=False):
     fig, axes = get_vanishing_points_fig(sketch, cam, VERBOSE)
     plot_end(sketch, fig, axes, "vanishing_points.png", VERBOSE)
     fig, axes = get_vanishing_points_fig(sketch, cam, VERBOSE)
-    plot_end(sketch, fig, axes, "vanishing_points_zoom.png", with_sketch_limits=True, 
+    plot_end(sketch, fig, axes, "vanishing_points_zoom.png", with_sketch_limits=True,
         VERBOSE=VERBOSE)
 
 def symm_candidates_ps(sketch, correspondences, cam):
@@ -168,23 +167,23 @@ def symm_candidates_ps(sketch, correspondences, cam):
     ps.show()
 
 
-def visualize_polyscope(batches, cam):
-    if len(batches) == 0:
-        return
-    fixed_strokes = extract_fixed_strokes(batches)
+def visualize_polyscope(result, cam):
+    # fixed_strokes = extract_fixed_strokes(batches)
     ps.init()
     ps.remove_all_structures()
-    for s_id, s in enumerate(fixed_strokes):
-        if len(s) == 0:
-            continue
-        plot_curve_ps(str(s_id), s)
 
-    batches_plane_points, plane_faces = get_planes_3d(batches)
-    for batch_id, plane_points in enumerate(batches_plane_points):
-        for i in range(3):
-            ps.register_surface_mesh("batch_"+str(batch_id)+"_"+str(i)+"_plane", 
-                np.array(plane_points[i]), np.array(plane_faces), 
-                transparency=0.4, color=np.array(vp_colors_rgb[i])/255)
+    for s_id, s in enumerate(result):
+        if s is not None:
+            if len(s) == 0:
+                continue
+            plot_curve_ps(str(s_id), s)
+
+    # batches_plane_points, plane_faces = get_planes_3d(batches)
+    # for batch_id, plane_points in enumerate(batches_plane_points):
+    #     for i in range(3):
+    #         ps.register_surface_mesh("batch_"+str(batch_id)+"_"+str(i)+"_plane",
+    #             np.array(plane_points[i]), np.array(plane_faces),
+    #             transparency=0.4, color=np.array(vp_colors_rgb[i])/255)
     
     setup_cam_ps(cam)
     ps.show()
@@ -197,7 +196,7 @@ def plot_acc_radius(sketch, VERBOSE=False):
             continue
         #patch = PolygonPatch(s.linestring.linestring.buffer(s.acc_radius).coords, fc=patch_blue, ec=patch_blue, alpha=0.5, zorder=0)
         #axes.add_patch(patch)
-        plot_polygon(s.linestring.linestring.buffer(s.acc_radius), ax=axes, 
+        plot_polygon(s.linestring.linestring.buffer(s.acc_radius), ax=axes,
             facecolor=patch_blue, edgecolor=patch_blue, alpha=0.5, zorder=0, add_points=False)
     sketch.display_strokes_2(fig=fig, ax=axes, norm_global=True,
         color_process=lambda s:"black", linewidth_data=lambda s: 3)
@@ -241,7 +240,6 @@ def visualize_batches(sketch, batches):
         axes.axis("off")
         axes.invert_yaxis()
         fig.set_size_inches((1024 / my_dpi, 1024 / my_dpi))
-        plt.savefig(os.path.join(batches_folder, "batch_"+str(batch_id)+".png"))
         plt.close(fig)
 
 
@@ -289,10 +287,10 @@ def visualize_correspondences(
 
             for i in range(3):
                 #patch = PolygonPatch(MultiPoint(cam.project_polyline(plane_points[i])).convex_hull,
-                #                     fc=vp_colors[i], ec=vp_colors[i], 
+                #                     fc=vp_colors[i], ec=vp_colors[i],
                 #                     alpha=0.4, zorder=0)
                 #axes[i].add_patch(patch)
-                plot_polygon(MultiPoint(cam.project_polyline(plane_points[i])).convex_hull, ax=axes[i], 
+                plot_polygon(MultiPoint(cam.project_polyline(plane_points[i])).convex_hull, ax=axes[i],
                     facecolor=vp_colors[i], edgecolor=vp_colors[i], alpha=0.4, zorder=0, add_points=False)
 
     self_sym_strokes = [[] for i in range(3)]
@@ -374,7 +372,7 @@ def get_planes_3d(batches, selected_batches=[]):
     bbox = tools_3d.bbox_from_points(points)
     for batch_id, batch in enumerate(batches):
         if len(selected_batches) > 0 and not batch_id in selected_batches:
-            batches_plane_points += []    
+            batches_plane_points += []
             continue
         shifted_origins = [np.zeros(3) for i in range(3)]
         for i in range(3):
@@ -392,7 +390,7 @@ def get_planes_3d(batches, selected_batches=[]):
                           [bbox[3], bbox[4], shifted_origins[2][2]],
                           [bbox[0], bbox[4], shifted_origins[2][2]]]
         batches_plane_points.append([x_plane_points, y_plane_points, z_plane_points])
-    
+
     plane_faces = [[0, 1, 2], [0, 2, 3]]
     return batches_plane_points, plane_faces
 

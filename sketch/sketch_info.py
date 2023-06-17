@@ -294,8 +294,6 @@ class Sketch:
                           use_cmap=False,
                           cmap=pl.cm.jet,
                           norm_global=True,
-                          # display_interval is useful when we want to partially
-                          # plot the sketch
                           display_strokes=[]):
         """
         process color based on stroke properties
@@ -310,9 +308,9 @@ class Sketch:
         display_data = []
         for s in self.strokes:
             (seg, lws, col) = s.get_line_display_data(None, linewidth_data)
-            if color_process != None: col = color_process(s)
-            if linewidth_data == None: lws = [s.width]
-            if linewidth_process != None: lws = linewidth_process(lws)
+            if color_process is not None: col = color_process(s)
+            if linewidth_data is None: lws = [s.width]
+            if linewidth_process is not None: lws = linewidth_process(lws)
             if use_cmap:
                 colmin = np.min(col)
                 colmax = np.max(col)

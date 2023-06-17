@@ -67,9 +67,12 @@ def visualize_lines(line_datas):
 
     # 绘制线段
     for line_data in line_datas:
+        # line_data = line_data[0]
         for i in range(len(line_data) - 1):
             start_point = line_data[i]
             end_point = line_data[i + 1]
+            print(start_point)
+            print(end_point)
             ax.plot([start_point[0], end_point[0]], [start_point[1], end_point[1]], [start_point[2], end_point[2]])
 
     # 设置坐标轴范围

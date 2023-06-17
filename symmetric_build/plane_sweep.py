@@ -3,6 +3,7 @@ from copy import deepcopy
 from scipy.spatial import distance
 from skspatial.objects import Plane
 
+from symmetric_build.cluster_proxies import cluster_proxy_strokes
 from symmetric_build.common_tools import copy_correspondences_batch
 from sketch.intersections import get_intersections_simple_batch, get_line_coverages_simple, relift_intersections
 from symmetric_build.ortools_models import solve_symm_bip_ortools
@@ -65,8 +66,8 @@ def plane_sweep(sketch, cam, batch_id, batch, symm_candidates,
             continue
 
         per_stroke_proxies = [[] for s_id in range(len(sketch.strokes))]
-        cluster_3d_lines_correspondence(local_candidate_correspondences,
-                                        per_stroke_proxies, sketch)
+        cluster_proxy_strokes(local_candidate_correspondences,
+                            per_stroke_proxies, sketch)
         eccentricity_weights = [[] for i in range(len(sketch.strokes))]
 
         intersections_3d_simple = get_intersections_simple_batch(
