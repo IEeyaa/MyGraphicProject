@@ -31,7 +31,7 @@ def preload_sketch(sketch):
     # 计算相交关系
     sketch.get_intersect_map()
     # 组成直线集群
-    sketch.get_line_cluster(10.0, 20.0, 5)
+    sketch.get_line_cluster(10.0, 5.0, 5)
     # 集群优化
     sketch.generate_line_from_cluster()
     # 二次计算相交关系
@@ -40,6 +40,7 @@ def preload_sketch(sketch):
     sketch.get_intersect_info()
     # 形成邻接表
     sketch.get_adjacent_intersections()
+    # sketch.strokes[18].axis_label = 3
 
     return cam, sketch
 

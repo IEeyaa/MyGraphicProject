@@ -93,14 +93,15 @@ def symmetric_driven_build_v2(cam, sketch):
     block_number = 1
     # 找寻candidate对：
     candidate = get_all_candidates_from_sketch(sketch, cam)
-    # 形成cluster:
-    stroke_groups = [[] for i in sketch.strokes]
     # 获得所有stroke匹配的candidates序号
     candidates_of_stroke = get_candidate_by_stroke(candidate, sketch)
     # 生成所有的锚定情况
     stroke_anchor_info = get_anchor_from_intersection(sketch)
     # 形成block
     blocks = gather_block_from_symmetric_lines(candidate)
+
+    blocks = [[0, 15], [16, 17]]
+
     print(blocks)
 
     # blocks.append([0, len(sketch.strokes)-1])
@@ -110,121 +111,89 @@ def symmetric_driven_build_v2(cam, sketch):
     per_stroke_triple_intersections = prepare_triple_intersections(sketch)
 
     final_answer = []
-    fixed_strokes = [[] for i in range(0, len(sketch.strokes))]
-    fixed_planes_scale_factors = []
+    final_fixed_strokes = []
+    temp_answer = []
+    max_score = 0
 
-    for plane in [0, 1, 2]:
+    for plane in [0]:
+        print("checking for plane: ", plane)
+        total_score = 0
+        fixed_strokes = [[] for i in range(0, len(sketch.strokes))]
+        fixed_intersections = []
         for block_number in range(0, len(blocks)):
+            print("block: ", block_number)
+            candidate_info = gather_construction_from_dif_direction_per_block(candidate, blocks[block_number], fixed_strokes)
+            plane_scale_factor = get_scale_factor_for_each_plane(cam, candidate_info, sketch, blocks[block_number])
+            # 重构所有相关的candidates:
+            planes_point_normal = []
+            refl_mats = []
+            for i in range(3):
+                focus_vp = i
+                sym_plane_point = np.zeros(3, dtype=np.float_)
+                sym_plane_normal = np.zeros(3, dtype=np.float_)
+                sym_plane_normal[focus_vp] = 1.0
+                sym_plane_point = cam.cam_pos + plane_scale_factor[i] * (np.array(sym_plane_point) - cam.cam_pos)
+                planes_point_normal.append([sym_plane_point, sym_plane_normal])
+            for p, n in planes_point_normal:
+                refl_mat = tools_3d.get_reflection_mat(p, n)
+                refl_mats.append(refl_mat)
 
-            per_axis_per_stroke_candidate_reconstructions = update_candidate_strokes(
-                fixed_strokes, candidate, blocks[block_number], len(sketch.strokes))
+            local_candidate_correspondences, correspondence_ids = copy_correspondences_batch(
+                candidate, blocks[block_number], fixed_strokes, refl_mats,
+                plane_scale_factor,
+                cam, sketch)
 
-            """
-                planes_scale_factors
-                存储每一个平面的平面缩放系数,传入参数的重点是per_axis_per_stroke_candidate_reconstructions
-                针对三个平面，给出所有可能的缩放系数，存储在一个一维数组
-                [[0.5, 0.75], [1], [2, 2.25]]代表0号平面的缩放系数可能为0.5, 0.75，其它同理
-            """
-            plane_scale_factors = get_planes_scale_factors(
-                sketch, cam, blocks[block_number], block_number, [0, 1, 2], fixed_strokes,
-                fixed_planes_scale_factors, per_axis_per_stroke_candidate_reconstructions)
-            """
-                将当前main_axis 主轴方向的planes_scale_factors只取第一个即使用定值
-            """
-            if plane != -1 and block_number > 0:
-                plane_scale_factors[plane] = [plane_scale_factors[plane][0]]
+            if len(local_candidate_correspondences) == 0:
+                continue
 
-            plane_scale_factor_number = [range(len(plane_scale_factor))
-                                            for plane_scale_factor in plane_scale_factors]
-            """
-                planes_combs
-                planes_combs将返回所有平面缩放因子可能形成的组合
-                加入说[[0.5, 0.75], [1], [1.25, 1.5, 2]], 那么会有
-                [0, 0, 0], [0, 0, 1], [0, 0, 2],
-                [1, 0, 0], [1, 0, 1], [1, 0, 2]
-                六种组合
-            """
-            planes_combs = list(product(*plane_scale_factor_number))
-            best_score = -10000
-            tmp_final_answer = []
-            best_comb = [0, 0, 0]
-            for index_comb, planes_comb in enumerate(planes_combs):
-                print("planes_comb: ", str(index_comb) + "/" + str(len(planes_combs)))
-                # 重构所有相关的candidates:
-                planes_point_normal = []
-                refl_mats = []
-                for i in range(3):
-                    focus_vp = i
-                    sym_plane_point = np.zeros(3, dtype=np.float_)
-                    sym_plane_normal = np.zeros(3, dtype=np.float_)
-                    sym_plane_normal[focus_vp] = 1.0
-                    sym_plane_point = cam.cam_pos + plane_scale_factors[i][planes_comb[i]] * (np.array(sym_plane_point) - cam.cam_pos)
-                    planes_point_normal.append([sym_plane_point, sym_plane_normal])
-                for p, n in planes_point_normal:
-                    refl_mat = tools_3d.get_reflection_mat(p, n)
-                    refl_mats.append(refl_mat)
+            stroke_proxies = [[] for s_id in range(len(sketch.strokes))]
+            cluster_proxy_strokes(local_candidate_correspondences,
+                                  stroke_proxies, sketch)
+            # 把所有的stroke_proxies 3D化
+            intersections_3d_simple = get_intersections_simple_batch(
+                stroke_proxies, sketch, cam, blocks[block_number], fixed_strokes)
+            # if block_number == 1:
+            #     for item in intersections_3d_simple:
+            #         print(item.stroke_ids, item.inter_id)
+            # print(intersections_3d_simple)
+            line_coverages_simple = get_line_coverages_simple(intersections_3d_simple, sketch,
+                                                                  extreme_intersections_distances_per_stroke)
+            score, corr, answer, tmp_fixed_intersections = get_best_candidate_by_score(
+                sketch=sketch,
+                candidates=local_candidate_correspondences,
+                candidates_of_stroke=candidates_of_stroke,
+                per_stroke_triple_intersections=per_stroke_triple_intersections,
+                intersections_3d=intersections_3d_simple,
+                line_coverages=line_coverages_simple,
+                block=blocks[block_number],
+                stroke_anchor_info=stroke_anchor_info,
+                group_infor=stroke_proxies,
+                plane_dir=plane,
+                fixed_strokes=fixed_strokes,
+                fixed_intersections=fixed_intersections,
+            )
+            # for item in stroke_proxies[1]:
+            #     temp_answer.append(item)
 
-                local_planes_scale_factors = [plane_scale_factors[0][planes_comb[0]],
-                                              plane_scale_factors[1][planes_comb[1]],
-                                              plane_scale_factors[2][planes_comb[2]]]
-
-                local_candidate_correspondences, correspondence_ids = copy_correspondences_batch(
-                    candidate, blocks[block_number], fixed_strokes, refl_mats,
-                    local_planes_scale_factors,
-                    cam, sketch)
-
-                if len(local_candidate_correspondences) == 0:
-                    continue
-
-                per_stroke_proxies = [[] for s_id in range(len(sketch.strokes))]
-                cluster_proxy_strokes(local_candidate_correspondences,
-                                      per_stroke_proxies, sketch)
-
-                intersections_3d_simple = get_intersections_simple_batch(
-                    per_stroke_proxies, sketch, cam, blocks[block_number], fixed_strokes)
-
-                line_coverages_simple = get_line_coverages_simple(intersections_3d_simple, sketch,
-                                                                      extreme_intersections_distances_per_stroke)
-                tmp_final_answer = []
-                score, corr, answer = get_best_candidate_by_score(
-                    sketch=sketch,
-                    candidates=local_candidate_correspondences,
-                    candidates_of_stroke=candidates_of_stroke,
-                    per_stroke_triple_intersections=per_stroke_triple_intersections,
-                    intersections_3d=intersections_3d_simple,
-                    line_coverages=line_coverages_simple,
-                    block=blocks[block_number],
-                    stroke_anchor_info=stroke_anchor_info,
-                    group_infor=per_stroke_proxies,
-                    plane_dir=plane,
-                    fixed_strokes=fixed_strokes
-                )
-                if score > best_score:
-                    tmp_final_answer = answer
-                    best_comb = planes_comb
-                    print(best_comb)
+            tmp_final_answer = answer
+            total_score += score
+            # print(tmp_fixed_intersections)
+            fixed_intersections.extend(tmp_fixed_intersections)
             for index, item in enumerate(tmp_final_answer):
                 if item is not None:
                     fixed_strokes[index].extend(item)
-            fixed_planes_scale_factors.append([plane_scale_factors[0][best_comb[0]],
-                                               plane_scale_factors[1][best_comb[1]],
-                                               plane_scale_factors[2][best_comb[2]]])
-    # result = []
-    # for stroke in sketch.strokes:
-    #     stroke_id = stroke.id
-    #     for item in stroke_groups[stroke_id]:
-    #         result.append(item)
+        print(total_score)
+        if total_score > max_score:
+            final_fixed_strokes = fixed_strokes
+            max_score = total_score
 
-    # answer = []
-    # stroke_ids = [17, 19, 36]
-    # for i in stroke_ids:
-    #     stroke_id = i
-    #     for item in stroke_groups[stroke_id]:
-    #         answer.append(item)
-
-    # visualize_lines(result)
-    for item in fixed_strokes:
+    for index, item in enumerate(final_fixed_strokes):
         if item is not None and len(item) > 0:
-            final_answer.append(item)
-    print(final_answer)
+            final_answer.append([str(index), item])
+
+    # 根据Intersection_3d拼接剩余的情况
+
+    for index, item in enumerate(temp_answer):
+        final_answer.append(["test"+str(index), item])
+
     return final_answer

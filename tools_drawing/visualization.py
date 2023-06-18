@@ -15,10 +15,11 @@ from tools import tools_3d
 from tools_drawing.verbose_decorator import verbose
 
 vp_colors = ["#1b9e77", "#d95f02", "#7570b3", "#e6ab02", "#a6761d", "#e7298a"]
-vp_colors_rgb = [[27,158,119], [217,95,2], [117,112,179], [231,41,138],
-    [102,166,30], [230,171,2]]
+vp_colors_rgb = [[27, 158, 119], [217, 95, 2], [117, 112, 179], [231, 41, 138],
+                 [102, 166, 30], [230, 171, 2]]
 my_dpi = 96.0
 patch_blue = "#B2CBE5"
+
 
 def get_sketch_limits(sketch):
     fig, axes = plt.subplots(nrows=1, ncols=1)
@@ -35,8 +36,9 @@ def get_sketch_limits(sketch):
     plt.close(fig)
     return x_lim, y_lim
 
+
 def plot_end(sketch, fig, axes, file_name, with_sketch_limits=False,
-    VERBOSE=False):
+             VERBOSE=False):
     if with_sketch_limits:
         x_lim, y_lim = get_sketch_limits(sketch)
         axes.set_xlim(x_lim)
@@ -52,18 +54,20 @@ def plot_end(sketch, fig, axes, file_name, with_sketch_limits=False,
     else:
         plt.show()
 
+
 def plot_curve_ps(s_name, s):
-    ps.register_curve_network(s_name,
-        np.array(s), np.array([[i, i+1] for i in range(len(s)-1)]))
+    ps.register_curve_network(s_name, np.array(s), np.array([[i, i + 1] for i in range(len(s) - 1)]))
+
 
 def setup_cam_ps(cam):
     ps.set_ground_plane_mode("shadow_only")
     ps.set_navigation_style("free")
-    #ps.set_up_dir("neg_z_up")
+    # ps.set_up_dir("neg_z_up")
     ps.set_up_dir("z_up")
     ps.look_at_dir(camera_location=cam.cam_pos,
-                   target=np.array(cam.view_dir) + np.array(cam.cam_pos), 
+                   target=np.array(cam.view_dir) + np.array(cam.cam_pos),
                    up_dir=np.array([0, 0, -1]))
+
 
 def get_sketch_fig(sketch):
     fig, axes = plt.subplots(nrows=1, ncols=1)
@@ -72,11 +76,13 @@ def get_sketch_fig(sketch):
                         top=1.0)
     return fig, axes
 
-def sketch_plot(sketch, VERBOSE=False):
+
+def sketch_plot(sketch, VERBOSE=True):
     fig, axes = get_sketch_fig(sketch)
     sketch.display_strokes_2(fig=fig, ax=axes, norm_global=True,
-        color_process=lambda s: "black", linewidth_data=lambda s:3)
+                             color_process=lambda s: "black", linewidth_data=lambda s: 3)
     plot_end(sketch, fig, axes, "input", VERBOSE=VERBOSE, with_sketch_limits=True)
+
 
 def clean_folder(folder):
     if os.path.exists(folder):
@@ -89,13 +95,12 @@ def clean_folder(folder):
 
 
 def sketch_plot_successive(sketch, folder):
-
     clean_folder(folder)
     for s_id, s in enumerate(sketch.strokes):
         fig, axes = plt.subplots(nrows=1, ncols=1)
         fig.subplots_adjust(wspace=0.0, hspace=1.0, left=0.0, right=1.0,
-                        bottom=0.0,
-                        top=1.0)
+                            bottom=0.0,
+                            top=1.0)
 
         pts = np.array([p.coords for p in s.points_list])
         axes.plot(pts[:, 0], pts[:, 1], lw=3.0, c="black")
@@ -103,15 +108,16 @@ def sketch_plot_successive(sketch, folder):
             pts = np.array([p.coords for p in prev_s.points_list])
             axes.plot(pts[:, 0], pts[:, 1], lw=1.0, c="grey")
 
-        #axes.set_xlim(0, max(sketch.width, sketch.height))
-        #axes.set_ylim(max(sketch.width, sketch.height), 0)
+        # axes.set_xlim(0, max(sketch.width, sketch.height))
+        # axes.set_ylim(max(sketch.width, sketch.height), 0)
         axes.axis("off")
         axes.axis("equal")
         axes.invert_yaxis()
-        tmp_file_name = os.path.join(folder, str(np.char.zfill(str(s_id), 3))+".png")
+        tmp_file_name = os.path.join(folder, str(np.char.zfill(str(s_id), 3)) + ".png")
         fig.set_size_inches((512 / my_dpi, 512 / my_dpi))
         plt.savefig(tmp_file_name)
         plt.close(fig)
+
 
 def get_vanishing_points_fig(sketch, cam, VERBOSE=False):
     # plot lines
@@ -124,24 +130,25 @@ def get_vanishing_points_fig(sketch, cam, VERBOSE=False):
         [cam.vanishing_points_coords[0], cam.vanishing_points_coords[1]],
         [cam.vanishing_points_coords[1], cam.vanishing_points_coords[2]],
         [cam.vanishing_points_coords[2], cam.vanishing_points_coords[0]]
-        ])
+    ])
     for i, s in enumerate(sketch.strokes):
         if s.is_curved():
             continue
         p0 = np.array(s.points_list[0].coords)
         v = p0 - np.array(s.points_list[-1].coords)
-        ext_line = LineString([p0 - 1000*v, p0 + 1000*v])
+        ext_line = LineString([p0 - 1000 * v, p0 + 1000 * v])
         intersections = ext_line.intersection(vp_triangle)
         plot_ext_line = []
         for inter in intersections.geoms:
             plot_ext_line.append(np.array(inter.coords[0]))
         plot_ext_line = np.array(plot_ext_line)
         if len(plot_ext_line.shape) == 2:
-            axes.plot(plot_ext_line[:,0], plot_ext_line[:,1], c=vp_colors[s.axis_label],
-            linestyle="dashed")
+            axes.plot(plot_ext_line[:, 0], plot_ext_line[:, 1], c=vp_colors[s.axis_label],
+                      linestyle="dashed")
     sketch.display_strokes_2(fig=fig, ax=axes, norm_global=True,
-        color_process=lambda s:vp_colors[s.axis_label], linewidth_data=lambda s: 3)
+                             color_process=lambda s: vp_colors[s.axis_label], linewidth_data=lambda s: 3)
     return fig, axes
+
 
 @verbose
 def vanishing_points(sketch, cam, VERBOSE=False):
@@ -149,7 +156,8 @@ def vanishing_points(sketch, cam, VERBOSE=False):
     plot_end(sketch, fig, axes, "vanishing_points.png", VERBOSE)
     fig, axes = get_vanishing_points_fig(sketch, cam, VERBOSE)
     plot_end(sketch, fig, axes, "vanishing_points_zoom.png", with_sketch_limits=True,
-        VERBOSE=VERBOSE)
+             VERBOSE=VERBOSE)
+
 
 def symm_candidates_ps(sketch, correspondences, cam):
     points = []
@@ -174,9 +182,9 @@ def visualize_polyscope(result, cam):
 
     for s_id, s in enumerate(result):
         if s is not None:
-            if len(s) == 0:
+            if len(s[1]) == 0:
                 continue
-            plot_curve_ps(str(s_id), s)
+            plot_curve_ps(s[0], s[1])
 
     # batches_plane_points, plane_faces = get_planes_3d(batches)
     # for batch_id, plane_points in enumerate(batches_plane_points):
@@ -184,9 +192,10 @@ def visualize_polyscope(result, cam):
     #         ps.register_surface_mesh("batch_"+str(batch_id)+"_"+str(i)+"_plane",
     #             np.array(plane_points[i]), np.array(plane_faces),
     #             transparency=0.4, color=np.array(vp_colors_rgb[i])/255)
-    
+
     setup_cam_ps(cam)
     ps.show()
+
 
 @verbose
 def plot_acc_radius(sketch, VERBOSE=False):
@@ -194,13 +203,14 @@ def plot_acc_radius(sketch, VERBOSE=False):
     for s in sketch.strokes:
         if np.isclose(s.acc_radius, 0.0):
             continue
-        #patch = PolygonPatch(s.linestring.linestring.buffer(s.acc_radius).coords, fc=patch_blue, ec=patch_blue, alpha=0.5, zorder=0)
-        #axes.add_patch(patch)
+        # patch = PolygonPatch(s.linestring.linestring.buffer(s.acc_radius).coords, fc=patch_blue, ec=patch_blue, alpha=0.5, zorder=0)
+        # axes.add_patch(patch)
         plot_polygon(s.linestring.linestring.buffer(s.acc_radius), ax=axes,
-            facecolor=patch_blue, edgecolor=patch_blue, alpha=0.5, zorder=0, add_points=False)
+                     facecolor=patch_blue, edgecolor=patch_blue, alpha=0.5, zorder=0, add_points=False)
     sketch.display_strokes_2(fig=fig, ax=axes, norm_global=True,
-        color_process=lambda s:"black", linewidth_data=lambda s: 3)
+                             color_process=lambda s: "black", linewidth_data=lambda s: 3)
     plot_end(sketch, fig, axes, "acc_radius", VERBOSE)
+
 
 @verbose
 def plot_stroke_type(sketch, VERBOSE=False):
@@ -216,7 +226,7 @@ def plot_stroke_type(sketch, VERBOSE=False):
         else:
             stroke_types.append(1)
     sketch.display_strokes_2(fig=fig, ax=axes, norm_global=True,
-        color_process=lambda s:vp_colors[stroke_types[s.id]], linewidth_data=lambda s: 3)
+                             color_process=lambda s: vp_colors[stroke_types[s.id]], linewidth_data=lambda s: 3)
     plot_end(sketch, fig, axes, "stroke_types", with_sketch_limits=True)
 
 
@@ -231,11 +241,11 @@ def visualize_batches(sketch, batches):
         sketch.display_strokes_2(fig=fig, ax=axes,
                                  color_process=lambda s: "grey")
         sketch.display_strokes_2(fig=fig, ax=axes,
-                                 display_strokes=np.arange(batch[0], batch[1]+1),
+                                 display_strokes=np.arange(batch[0], batch[1] + 1),
                                  color_process=lambda s: "black",
                                  linewidth_data=lambda s: 3.0)
-        #axes.set_xlim(0, sketch.width)
-        #axes.set_ylim(sketch.height, 0)
+        # axes.set_xlim(0, sketch.width)
+        # axes.set_ylim(sketch.height, 0)
         axes.axis("equal")
         axes.axis("off")
         axes.invert_yaxis()
@@ -243,7 +253,7 @@ def visualize_batches(sketch, batches):
         plt.close(fig)
 
 
-#def visualize_batches_intermediate_results(sketch, cam, batches):
+# def visualize_batches_intermediate_results(sketch, cam, batches):
 def visualize_correspondences(
         sketch, cam, batches, selected_batches=[], plot_planes=False, VERBOSE=False):
     correspondences = []
@@ -259,17 +269,17 @@ def visualize_correspondences(
     line_label_colors = sns.color_palette("Set1", n_colors=6)
     line_label_colors[5] = line_label_colors[4]
     cmap = sns.color_palette("tab20b", n_colors=len(sketch.strokes))
-    cmap = sns.color_palette(list(sns.color_palette("Set1", n_colors=8))+
-                             list(sns.color_palette("Dark2", n_colors=8))+
+    cmap = sns.color_palette(list(sns.color_palette("Set1", n_colors=8)) +
+                             list(sns.color_palette("Dark2", n_colors=8)) +
                              list(sns.color_palette("Accent", n_colors=8)),
                              n_colors=len(sketch.strokes))
-    #cmap = sns.color_palette("Paired", n_colors=len(sketch.strokes))
+    # cmap = sns.color_palette("Paired", n_colors=len(sketch.strokes))
     x_lim, y_lim = get_sketch_limits(sketch)
     fig, axes = plt.subplots(nrows=1, ncols=3)
     fig.subplots_adjust(wspace=0.0, hspace=0.0, left=0.0, right=1.0,
                         bottom=0.0, top=1.0)
 
-    #fig.subplots_adjust(wspace=0.0, hspace=0.0, left=0.0, right=1.0,
+    # fig.subplots_adjust(wspace=0.0, hspace=0.0, left=0.0, right=1.0,
     #                    bottom=0.0, top=1.0)
 
     for j in range(3):
@@ -286,12 +296,12 @@ def visualize_correspondences(
                 continue
 
             for i in range(3):
-                #patch = PolygonPatch(MultiPoint(cam.project_polyline(plane_points[i])).convex_hull,
+                # patch = PolygonPatch(MultiPoint(cam.project_polyline(plane_points[i])).convex_hull,
                 #                     fc=vp_colors[i], ec=vp_colors[i],
                 #                     alpha=0.4, zorder=0)
-                #axes[i].add_patch(patch)
+                # axes[i].add_patch(patch)
                 plot_polygon(MultiPoint(cam.project_polyline(plane_points[i])).convex_hull, ax=axes[i],
-                    facecolor=vp_colors[i], edgecolor=vp_colors[i], alpha=0.4, zorder=0, add_points=False)
+                             facecolor=vp_colors[i], edgecolor=vp_colors[i], alpha=0.4, zorder=0, add_points=False)
 
     self_sym_strokes = [[] for i in range(3)]
 
@@ -320,21 +330,22 @@ def visualize_correspondences(
                 stroke_colors[s_id] = color
                 pts = np.array([p.coords for p in sketch.strokes[s_id].points_list])
                 axes[axis_id].plot(pts[:, 0], pts[:, 1], color=color, lw=3)
-        axes[axis_id].text(.5, .95, "Symmetry correspondences for axis "+str(axis_id),
-                              horizontalalignment='center',
-                              transform=axes[axis_id].transAxes)
+        axes[axis_id].text(.5, .95, "Symmetry correspondences for axis " + str(axis_id),
+                           horizontalalignment='center',
+                           transform=axes[axis_id].transAxes)
         add_sketch_vp_arrow(sketch, x_lim, y_lim, cam, axes[axis_id], axis_id, line_label_colors)
     if VERBOSE:
         plt.show()
     else:
         file_name = os.path.join(sketch.sketch_folder, "correspondences.png")
         if len(selected_batches) > 0:
-            last_part = "correspondences_"+"_".join([str(sel) for sel in selected_batches])+".png"
+            last_part = "correspondences_" + "_".join([str(sel) for sel in selected_batches]) + ".png"
             if os.path.exists(os.path.join(sketch.sketch_folder, "batches")):
                 file_name = os.path.join(sketch.sketch_folder, "batches", last_part)
             else:
                 file_name = os.path.join(sketch.sketch_folder, last_part)
         plt.savefig(file_name)
+
 
 def add_sketch_vp_arrow(sketch, x_lim, y_lim, camera, axis, axis_id, colors):
     sketch_points = np.array([p.coords for s in sketch.strokes for p in s.points_list])
@@ -342,26 +353,27 @@ def add_sketch_vp_arrow(sketch, x_lim, y_lim, camera, axis, axis_id, colors):
 
     if axis_id == 0:
         left_range = lowest_point[0] - x_lim[0]
-        middle_left = np.array([lowest_point[0] - left_range/4, lowest_point[1]])
+        middle_left = np.array([lowest_point[0] - left_range / 4, lowest_point[1]])
         vec = np.array(camera.vanishing_points_coords[0]) - middle_left
         vec /= np.linalg.norm(vec)
-        axis.arrow(middle_left[0], middle_left[1], left_range/2*vec[0], left_range/2*vec[1],
+        axis.arrow(middle_left[0], middle_left[1], left_range / 2 * vec[0], left_range / 2 * vec[1],
                    width=5, color=colors[0], alpha=0.5)
 
     elif axis_id == 1:
         right_range = x_lim[1] - lowest_point[0]
-        middle_right = np.array([lowest_point[0] + right_range/4, lowest_point[1]])
+        middle_right = np.array([lowest_point[0] + right_range / 4, lowest_point[1]])
         vec = np.array(camera.vanishing_points_coords[1]) - middle_right
         vec /= np.linalg.norm(vec)
-        axis.arrow(middle_right[0], middle_right[1], right_range/2*vec[0], right_range/2*vec[1],
+        axis.arrow(middle_right[0], middle_right[1], right_range / 2 * vec[0], right_range / 2 * vec[1],
                    width=5, color=colors[1], alpha=0.5)
 
     elif axis_id == 2:
         vec = np.array([0, 1])
         up_range = y_lim[1] - y_lim[0]
-        middle_up = np.array([x_lim[1]-10, y_lim[0]+up_range/4])
-        axis.arrow(middle_up[0], middle_up[1], up_range/2*vec[0], up_range/2*vec[1],
+        middle_up = np.array([x_lim[1] - 10, y_lim[0] + up_range / 4])
+        axis.arrow(middle_up[0], middle_up[1], up_range / 2 * vec[0], up_range / 2 * vec[1],
                    width=5, color=colors[2], alpha=0.5)
+
 
 def get_planes_3d(batches, selected_batches=[]):
     batches_plane_points = []
@@ -394,6 +406,7 @@ def get_planes_3d(batches, selected_batches=[]):
     plane_faces = [[0, 1, 2], [0, 2, 3]]
     return batches_plane_points, plane_faces
 
+
 def plot_intersections(sketch, file_name="intersections.png", VERBOSE=False):
     fig, axes = get_sketch_fig(sketch)
     for inter in sketch.intersection_graph.get_intersections():
@@ -409,12 +422,11 @@ def plot_intersections(sketch, file_name="intersections.png", VERBOSE=False):
         else:
             axes.add_artist(Circle(xy=inter.inter_coords, radius=inter.acc_radius, color="blue"))
     sketch.display_strokes_2(fig=fig, ax=axes, norm_global=True,
-        color_process=lambda s: "black", linewidth_data=lambda s:3)
+                             color_process=lambda s: "black", linewidth_data=lambda s: 3)
     plot_end(sketch, fig, axes, file_name, VERBOSE)
 
 
 def plot_candidate_correspondences(sketch, global_candidate_correspondences):
-
     tmp_per_axis_per_stroke_list = [[[] for i in range(len(sketch.strokes))] for i in range(3)]
     for cand in global_candidate_correspondences:
         tmp_per_axis_per_stroke_list[cand[4]][cand[0]].append(cand[1])
@@ -442,4 +454,5 @@ def plot_candidate_correspondences(sketch, global_candidate_correspondences):
             axes.set_ylim(sketch.height, 0)
             axes.axis("equal")
             axes.axis("off")
-            plt.savefig(os.path.join(candidate_correspondences_folder, "axis_"+str(axis)+"_stroke_"+str(np.char.zfill(str(s_id), 3))+".png"))
+            plt.savefig(os.path.join(candidate_correspondences_folder,
+                                     "axis_" + str(axis) + "_stroke_" + str(np.char.zfill(str(s_id), 3)) + ".png"))

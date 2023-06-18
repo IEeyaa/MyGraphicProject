@@ -289,16 +289,18 @@ class Sketch:
     def display_strokes_2(self,
                           fig=None, ax=None,
                           color_process=lambda s: "red",
-                          linewidth_data= 1,
+                          linewidth_data=1,
                           linewidth_process=None,
                           use_cmap=False,
                           cmap=pl.cm.jet,
                           norm_global=True,
-                          display_strokes=[]):
+                          display_strokes=None):
         """
         process color based on stroke properties
         """
-        if fig == None or ax == None:
+        if display_strokes is None:
+            display_strokes = []
+        if fig is None or ax is None:
             fig, ax = plt.subplots()
             ax.set_xlim(0, self.width)
             ax.set_ylim(self.height, 0)
@@ -308,14 +310,19 @@ class Sketch:
         display_data = []
         for s in self.strokes:
             (seg, lws, col) = s.get_line_display_data(None, linewidth_data)
-            if color_process is not None: col = color_process(s)
-            if linewidth_data is None: lws = [s.width]
-            if linewidth_process is not None: lws = linewidth_process(lws)
+            if color_process is not None:
+                col = color_process(s)
+            if linewidth_data is None:
+                lws = [s.width]
+            if linewidth_process is not None:
+                lws = linewidth_process(lws)
             if use_cmap:
                 colmin = np.min(col)
                 colmax = np.max(col)
-                if colmin < mn: mn = colmin
-                if colmax > mx: mx = colmax
+                if colmin < mn:
+                    mn = colmin
+                if colmax > mx:
+                    mx = colmax
             display_data.append((seg, lws, col))
 
         if use_cmap:
@@ -336,6 +343,13 @@ class Sketch:
             col = d[2]
             lc = LineCollection(d[0], linewidths=lws, colors=col, antialiaseds=True)
             ax.add_collection(lc)
+
+            # 计算标签的位置
+            x_label = (d[0][0][0][0] + d[0][-1][0][0]) / 2
+            y_label = (d[0][0][0][1] + d[0][-1][0][1]) / 2
+
+            # 在线的中间位置添加标签
+            ax.text(x_label, y_label, f"{d_stroke_id}", color=col, fontsize=8, ha='center', va='center')
 
 
 class Intersection:
@@ -379,5 +393,3 @@ class Intersection3D:
         self.inter_coords_3d = None
         self.camera_depth = None
         self.adjacent_inter_ids = None
-
-
