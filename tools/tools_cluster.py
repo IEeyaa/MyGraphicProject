@@ -114,8 +114,8 @@ def cluster_3d_lines_correspondence(
             stroke_groups[stroke_id] = [stroke_3d_constructions[0][1]]
             candidate_belong[stroke_3d_constructions[0][0]].append(0)
         else:
-            points_0 = np.array([line[0][0] for line in all_lines])
-            points_1 = np.array([line[0][1] for line in all_lines])
+            points_0 = np.array([line[0] for line in all_lines])
+            points_1 = np.array([line[1] for line in all_lines])
             threshold = 0.1 * np.max([np.linalg.norm(points_0[i] - points_1[i]) for i in range(0, len(points_0))])
             all_sp = [line[1][0][0] for line in stroke_3d_constructions]
             sp_dir = all_sp[1] - all_sp[0]
@@ -140,8 +140,8 @@ def cluster_3d_lines_correspondence(
                         candidates_of_group[stroke_id][cluster_line_number].append([stroke_3d_constructions[sp_id][0],
                                                                                     abs(tmp_sp - sp)])
                 if len(group_lines) >= 1:
-                    points_0 = np.array([line[0][0] for line in group_lines])
-                    points_1 = np.array([line[0][1] for line in group_lines])
+                    points_0 = np.array([line[0] for line in group_lines])
+                    points_1 = np.array([line[1] for line in group_lines])
                     cluster_line = [np.mean(points_0, axis=0), np.mean(points_1, axis=0)]
                     # 形成一个新的group
                     stroke_groups[stroke_id].append(cluster_line)

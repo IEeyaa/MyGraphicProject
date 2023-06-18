@@ -281,22 +281,24 @@ class Intersection:
 
 
 class Intersection3D:
-    def __init__(self, index, stroke_id, inter_coords):
-        """
-        交叉对象的存储。
+    def __init__(self, inter_id=-1, stroke_ids=None,
+                 cam_depths=None, acc_radius=-1, epsilon=0.0, is_fixed=False, fix_depth=-1):
+        if cam_depths is None:
+            cam_depths = []
+        if stroke_ids is None:
+            stroke_ids = []
+        self.inter_id = inter_id
+        self.stroke_ids = stroke_ids
+        self.cam_depths = cam_depths
+        self.acc_radius = acc_radius
+        self.epsilon = epsilon
+        self.is_fixed = is_fixed
+        self.fix_depth = fix_depth
 
-        参数：
-        - stroke_points：表示折线的点坐标列表
 
-        Stroke对象包含以下属性：
-        - pointNumber：折线的点数量
-        - coordinates：折线的点坐标列表
-        - length：折线的长度
-
-        """
-        self.id = index
-        self.stroke_id = stroke_id
-        self.inter_coords = inter_coords
-        self.inter_coords_3d = None
-        self.camera_depth = None
-        self.adjacent_inter_ids = None
+class LineCoverage:
+    def __init__(self, weight, inter_id, stroke_proxy_ids=[], stroke_ids=[]):
+        self.weight = weight
+        self.inter_id = inter_id
+        self.stroke_proxy_ids = stroke_proxy_ids
+        self.stroke_ids = stroke_ids

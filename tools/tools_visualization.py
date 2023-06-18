@@ -14,7 +14,6 @@ def plot_curve_ps(s_name, s):
 def setup_cam_ps(cam):
     ps.set_ground_plane_mode("shadow_only")
     ps.set_navigation_style("free")
-    # ps.set_up_dir("neg_z_up")
     ps.set_up_dir("z_up")
     ps.look_at_dir(camera_location=cam.cam_pos,
                    target=np.array(cam.view_dir) + np.array(cam.cam_pos),

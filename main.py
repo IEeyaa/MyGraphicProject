@@ -3,7 +3,7 @@
 from myOptimize.prepare import prepare_candidates_and_intersections
 from sketch.get_sketch import get_sketch_from_image
 from sketch.preload_sketch import preload_sketch
-from tools.visualization import visualize_polyscope
+from tools.tools_visualization import visualize_polyscope
 
 
 def symmetric_build_from_2D_to_3D():

@@ -2,7 +2,7 @@ import numpy as np
 from other_tools import tools_3d
 
 
-def cluster_lines_non_unique_angles(lines, VERBOSE=False):
+def cluster_lines_non_unique_angles(lines):
     lines = np.array([line for line in lines])
     lines_vec = lines[:, 1] - lines[:, 0]
     for l_id, l in enumerate(lines_vec):
