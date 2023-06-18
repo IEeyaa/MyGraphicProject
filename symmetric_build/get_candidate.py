@@ -5,8 +5,8 @@ import numpy as np
 from scipy.spatial import ConvexHull
 from shapely import Polygon, LineString, MultiLineString, MultiPoint
 
-from tools import tools_3d
-from tools.tools_3d import apply_hom_transform_to_points, get_reflection_mat, line_line_collision, line_3d_length, \
+from other_tools import tools_3d
+from other_tools.tools_3d import apply_hom_transform_to_points, get_reflection_mat, line_line_collision, line_3d_length, \
     calculate_intersection
 
 # 分组

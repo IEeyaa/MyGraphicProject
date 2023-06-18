@@ -1,21 +1,17 @@
 # -*- coding:utf-8 -*-
 # @Author: IEeya
+from myOptimize.prepare import prepare_candidates_and_intersections
 from sketch.get_sketch import get_sketch_from_image
-from sketch.preload_sketch import preload_sketch, visualize_lines
-from sketch.symmetric_drive import symmetric_driven_build_v2
-from tools_drawing.visualization import sketch_plot, visualize_polyscope
+from sketch.preload_sketch import preload_sketch
+from tools.visualization import visualize_polyscope
 
 
 def symmetric_build_from_2D_to_3D():
     filepath = "./data/sketch.svg"
     sketch = get_sketch_from_image(filepath)
-    # sketch_plot(sketch)
     cam, sketch = preload_sketch(sketch)
-    sketch_plot(sketch, VERBOSE=False)
-    answer = symmetric_driven_build_v2(cam, sketch)
+    answer = prepare_candidates_and_intersections(cam, sketch)
     visualize_polyscope(answer, cam)
-    # # 可视化
-    # # visualize_lines(answer)
 
 
 if __name__ == '__main__':

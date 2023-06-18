@@ -18,8 +18,7 @@ def preload_sketch(sketch):
     # 过滤短线
     sketch.filter_strokes()
     # 标定身份
-    sketch.judge_lines(5)
-
+    sketch.judge_lines(2)
     # 加载相机
     cam = init_camera(sketch)
     # 测试，消除曲线
@@ -40,7 +39,7 @@ def preload_sketch(sketch):
     sketch.get_intersect_info()
     # 形成邻接表
     sketch.get_adjacent_intersections()
-    # sketch.strokes[18].axis_label = 3
+    sketch.strokes[18].axis_label = 3
 
     return cam, sketch
 

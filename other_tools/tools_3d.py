@@ -1,22 +1,10 @@
 import numpy as np
-import open3d as o3d
-from scipy.linalg import lstsq
-from math import acos, sqrt, pi, exp
 from skspatial.objects import Plane, Line
-import matplotlib.pyplot as plt
-from sklearn.neighbors import NearestNeighbors
-from copy import deepcopy
 
 ALPHA = np.deg2rad(15.0)
 SIGMA_1 = (1.0 - np.cos(ALPHA))/3.0
 SIGMA_2 = (np.cos(np.deg2rad(90 - 15)))/3.0
 
-def line_line_intersection_2d(a, b, c, d):
-    x = ((a[0]*b[1]-a[1]*b[0])*(c[0]-d[0]) - (c[0]*d[1]-c[1]*d[0])*(a[0]-b[0]))\
-        /((a[0]-b[0])*(c[1]-d[1]) - (c[0]-d[0])*(a[1]-b[1]))
-    y = ((a[0]*b[1]-a[1]*b[0])*(c[1]-d[1]) - (c[0]*d[1]-c[1]*d[0])*(a[1]-b[1])) \
-        /((a[0]-b[0])*(c[1]-d[1]) - (c[0]-d[0])*(a[1]-b[1]))
-    return np.array([x, y])
 
 def line_plane_collision(plane_normal, plane_point, ray_dir, ray_p):
 
@@ -28,8 +16,10 @@ def line_plane_collision(plane_normal, plane_point, ray_dir, ray_p):
     si = -plane_normal.dot(w) / ndotu
     return w + si * ray_dir + plane_point
 
+
 def point_line_distance(line_a, line_b, p):
     return np.linalg.norm(np.cross(line_b - line_a, p - line_a))/np.linalg.norm(line_b - line_a)
+
 
 def line_segment_collision(line_p, line_dir, seg, return_axis_point=False):
     seg_p = seg[0]
@@ -83,6 +73,7 @@ def line_segment_collision(line_p, line_dir, seg, return_axis_point=False):
                 return seg[1], seg_1_dist
     return inter_p, point_line_distance(line_p, line_p+1.0*line_dir, inter_p)
 
+
 def line_polyline_collision(line_p, line_dir, polyline):
     intersections = [line_segment_collision(line_p, line_dir, np.array([polyline[2*i], polyline[2*i+1]]))
                      for i in range(int(len(polyline)/2))]
@@ -93,8 +84,7 @@ def line_polyline_collision(line_p, line_dir, polyline):
         return None
     return intersections[np.argmin(distances)][0]
 
-# v1 and v2 should be normalized
-# returns closest points on line 1 and on line 2
+
 def line_line_collision(p1, v1, p2, v2):
     v3 = np.cross(v1, v2)
     v3 /= np.linalg.norm(v3)
@@ -111,46 +101,6 @@ def line_line_collision(p1, v1, p2, v2):
     closest_line_2 = p2 + t2*v2
     return [closest_line_1, closest_line_2]
 
-# useful to get plane_u, plane_v for an ellipse
-def get_basis_for_planar_point_cloud(points):
-    points = np.array(points)
-    plane = Plane.best_fit(points)
-    normal = np.array(plane.normal)
-    first_point = points[0]
-
-    max_dist_point = points[np.argmax(np.linalg.norm(points - first_point, axis=-1))]
-    plane_u = max_dist_point - first_point
-    plane_u /= np.linalg.norm(plane_u)
-    plane_v = np.cross(plane_u, normal)
-    plane_v /= np.linalg.norm(plane_v)
-    return plane_u, plane_v
-
-def get_ellipse_eccentricity(ellipse_3d, plane_u, plane_v):
-
-    projected_ellipse = np.array([[np.dot(plane_u, p), np.dot(plane_v, p)] for p in ellipse_3d])
-    x = projected_ellipse[:, 0]
-    y = projected_ellipse[:, 1]
-    xmean, ymean = x.mean(), y.mean()
-    x -= xmean
-    y -= ymean
-    _, scale, _ = np.linalg.svd(np.stack((x, y)))
-
-    major_axis_length = np.max(scale)
-    minor_axis_length = np.min(scale)
-    a = major_axis_length / 2
-    b = minor_axis_length / 2
-    ecc = np.sqrt(np.square(a) - np.square(b)) / a
-    return ecc
-
-def angle_line_line(l1, l2):
-    vec_1 = l1[-1] - l1[0]
-    vec_2 = l2[-1] - l2[0]
-    norm_vec_1 = vec_1/np.linalg.norm(vec_1)
-    norm_vec_2 = vec_2/np.linalg.norm(vec_2)
-    if np.isclose(np.dot(norm_vec_1, norm_vec_2), 1.0):
-        return 0.0
-    return acos(np.abs(np.dot(norm_vec_1, norm_vec_2)))
-
 
 def line_3d_length(polyline):
     l = np.array(polyline)
@@ -163,35 +113,6 @@ def line_3d_length(polyline):
         exit()
     return np.sum(np.linalg.norm(l[1:] - l[:len(l)-1], axis=1))
 
-def merge_two_line_segments(l1, l2):
-    # just merge the closest endpoints
-    if np.linalg.norm(l1[0] - l2[0]) < np.linalg.norm(l1[0] - l2[1]):
-        return np.array([(l1[0]+l2[0])/2.0, (l1[1]+l2[1])/2.0])
-    return np.array([(l1[0]+l2[1])/2.0, (l1[1]+l2[0])/2.0])
-
-def merge_n_line_segments(lines):
-    l1 = lines[0]
-    for l in lines[1:]:
-        l1 = merge_two_line_segments(l1, l)
-    return l1
-
-def get_rotation_mat_z(angle):
-
-    return np.array([[np.cos(angle), -np.sin(angle), 0],
-                     [np.sin(angle), np.cos(angle), 0],
-                     [0, 0, 1]])
-
-def get_rotation_mat_x(angle):
-
-    return np.array([[1, 0, 0],
-                     [0, np.cos(angle), -np.sin(angle)],
-                     [0, np.sin(angle), np.cos(angle)]])
-
-def get_rotation_mat_y(angle):
-
-    return np.array([[np.cos(angle), 0, -np.sin(angle)],
-                     [0, 1, 0],
-                     [np.sin(angle), 0, np.cos(angle)]])
 
 def get_reflection_mat(plane_point, plane_normal):
     plane_point = np.array(plane_point)
@@ -209,6 +130,7 @@ def get_reflection_mat(plane_point, plane_normal):
 
     return refl_mat
 
+
 def apply_hom_transform_to_points(points, hom_mat):
     points = np.array(points)
     hom_points = np.ones([points.shape[0], 4])
@@ -217,6 +139,7 @@ def apply_hom_transform_to_points(points, hom_mat):
     transformed_points = transformed_points.transpose()
     transformed_points[:, :] /= transformed_points[:, -1][:, None]
     return transformed_points[:, :-1]
+
 
 def plane_point_normal_to_equation(plane_point, plane_normal):
     plane_point = np.array(plane_point)
@@ -227,7 +150,7 @@ def plane_point_normal_to_equation(plane_point, plane_normal):
     plane_equation[-1] = d
     return plane_equation
 
-# a, b: non-parallel plane-equations
+
 def plane_plane_intersection(a, b):
     u = np.cross(a[:-1], b[:-1])
     u /= np.linalg.norm(u)
@@ -235,84 +158,6 @@ def plane_plane_intersection(a, b):
     x = np.array((-a[-1], -b[-1], 0.))
     return np.linalg.solve(m, x), u
 
-#def out_of_bbox(bbox, points):
-def scale_bbox(bbox, scale_factor):
-
-    bbox_min = bbox[:3]
-    bbox_max = bbox[3:]
-    bbox_mid = (bbox_min + bbox_max)/2.0
-    bbox_min = bbox_min + (bbox_min-bbox_mid)*scale_factor
-    bbox_max = bbox_max + (bbox_max-bbox_mid)*scale_factor
-    bbox[:3] = bbox_min
-    bbox[3:] = bbox_max
-
-def bbox_from_points(points):
-    # min_x, min_y, min_z, max_x, max_y, max_z
-    points = np.array(points)
-    bbox = np.zeros(6, dtype=float)
-    bbox[:3] = 1000.0
-    bbox[3:] = -1000.0
-    bbox[0] = np.minimum(bbox[0], np.min(points[:, 0]))
-    bbox[1] = np.minimum(bbox[1], np.min(points[:, 1]))
-    bbox[2] = np.minimum(bbox[2], np.min(points[:, 2]))
-    bbox[3] = np.maximum(bbox[3], np.max(points[:, 0]))
-    bbox[4] = np.maximum(bbox[4], np.max(points[:, 1]))
-    bbox[5] = np.maximum(bbox[5], np.max(points[:, 2]))
-    return bbox
-
-def bbox_diag(bbox):
-    return np.linalg.norm(bbox[:3] - bbox[3:])
-
-def bbox_volume(bbox):
-    return abs(bbox[0] - bbox[3])*abs(bbox[1] - bbox[4])*abs(bbox[2] - bbox[5])
-
-def out_of_bbox(points, bbox):
-    for p in points:
-        if np.any(p < bbox[:3]) or np.any(p > bbox[3:]):
-            return True
-    return False
-
-def all_out_of_bbox(points, bbox):
-    checks = []
-    for p in points:
-        checks.append(np.any(p < bbox[:3]) or np.any(p > bbox[3:]))
-    return np.all(checks)
-
-# seg is an array of points, parametrized by the arc-parameters in interval
-# interval: [a, b]
-# return point corresponding to arc-parameter t
-def interpolate_segment(seg, interval, t):
-
-    if np.isclose(t, interval[0]):
-        return seg[0], 0
-
-    if np.isclose(t, interval[1]):
-        return seg[-1], len(seg)-2
-
-    for i in range(len(seg)-1):
-        t_i = interval[0] + \
-              i*(interval[1] - interval[0])/(len(seg)-1)
-        t_i_plus_1 = interval[0] + \
-                     (i+1)*(interval[1] - interval[0])/(len(seg)-1)
-        if t >= t_i and t <= t_i_plus_1:
-            return seg[i] + (t - t_i)/(t_i_plus_1 - t_i)* \
-                   (seg[i+1] - seg[i]), i
-    return [], -1
-
-def get_foreshortening(polyline, cam_pos):
-    cam_pos = np.array(cam_pos)
-    polyline = np.array(polyline)
-    cam_dists = [np.linalg.norm(p - cam_pos) for p in polyline]
-    foreshortening = np.sum([np.abs(cam_dists[i+1]-cam_dists[i])
-                             for i in range(len(polyline)-1)])
-    return foreshortening
-
-def get_foreshortening_max(polyline, cam_pos):
-    cam_pos = np.array(cam_pos)
-    polyline = np.array(polyline)
-    cam_dists = [np.linalg.norm(p - cam_pos) for p in polyline]
-    foreshortening = np.max(cam_dists) - np.min(cam_dists)
-    return foreshortening
 
 def reconstruct_two_points(p1, p2, refl_mat, camera):
 
@@ -333,7 +178,6 @@ def reconstruct_two_points(p1, p2, refl_mat, camera):
     return [p1_reconstructed, p2_reconstructed]
 
 
-# returns 2 arrays of shape (2, 3), i.e., two 3d lines
 def reconstruct_symmetric_strokes_straight(s_1, s_2, sym_plane_point, sym_plane_normal, camera):
 
     refl_mat = get_reflection_mat(sym_plane_point, sym_plane_normal)
@@ -376,92 +220,6 @@ def reconstruct_symmetric_strokes_straight(s_1, s_2, sym_plane_point, sym_plane_
                                                               s_1.lineString.coords[-1]],
                                                              reflected_line[0], reflected_line_dir))
     return final_line, inter_line
-
-
-def chamfer_distance(x, y, metric='l2', direction='bi', return_pointwise_distances=False):
-    """Chamfer distance between two point clouds
-    Parameters
-    ----------
-    x: numpy array [n_points_x, n_dims]
-        first point cloud
-    y: numpy array [n_points_y, n_dims]
-        second point cloud
-    metric: string or callable, default ‘l2’
-        metric to use for distance computation. Any metric from scikit-learn or scipy.spatial.distance can be used.
-    direction: str
-        direction of Chamfer distance.
-            'y_to_x':  computes average minimal distance from every point in y to x
-            'x_to_y':  computes average minimal distance from every point in x to y
-            'bi': compute both
-    Returns
-    -------
-    chamfer_dist: float
-        computed bidirectional Chamfer distance:
-            sum_{x_i \in x}{\min_{y_j \in y}{||x_i-y_j||**2}} + sum_{y_j \in y}{\min_{x_i \in x}{||x_i-y_j||**2}}
-    """
-
-    pointwise_dists = []
-    if direction=='y_to_x':
-        x_nn = NearestNeighbors(n_neighbors=1, leaf_size=1, algorithm='kd_tree', metric=metric).fit(x)
-        min_y_to_x = x_nn.kneighbors(y)[0]
-        chamfer_dist = np.mean(min_y_to_x)
-        pointwise_dists = min_y_to_x
-    elif direction=='x_to_y':
-        y_nn = NearestNeighbors(n_neighbors=1, leaf_size=1, algorithm='kd_tree', metric=metric).fit(y)
-        min_x_to_y = y_nn.kneighbors(x)[0]
-        chamfer_dist = np.mean(min_x_to_y)
-        pointwise_dists = min_x_to_y
-    elif direction=='bi':
-        x_nn = NearestNeighbors(n_neighbors=1, leaf_size=1, algorithm='kd_tree', metric=metric).fit(x)
-        min_y_to_x = x_nn.kneighbors(y)[0]
-        y_nn = NearestNeighbors(n_neighbors=1, leaf_size=1, algorithm='kd_tree', metric=metric).fit(y)
-        min_x_to_y = y_nn.kneighbors(x)[0]
-        chamfer_dist = np.mean(min_y_to_x) + np.mean(min_x_to_y)
-        pointwise_dists = [min_x_to_y, min_y_to_x]
-    else:
-        raise ValueError("Invalid direction type. Supported types: \'y_x\', \'x_y\', \'bi\'")
-
-    if return_pointwise_distances:
-        return chamfer_dist, pointwise_dists
-    return chamfer_dist
-
-def icp_registration(s1_pts, s2_pts, with_scaling=False):
-
-    initial_T = np.identity(4) # Initial transformation for ICP
-    source = np.zeros([len(s1_pts), 3])
-    source[:, :2] = s1_pts
-    target = np.zeros([len(s2_pts), 3])
-    target[:, :2] = s2_pts
-    source_pc = o3d.geometry.PointCloud()
-    source_pc.points = o3d.utility.Vector3dVector(source)
-    target_pc = o3d.geometry.PointCloud()
-    target_pc.points = o3d.utility.Vector3dVector(target)
-
-    distance = 1000.0 # The threshold distance used for searching correspondences
-    icp_type = o3d.pipelines.registration.TransformationEstimationPointToPoint(with_scaling=with_scaling)
-    iterations = o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration = 10000)
-    result = o3d.pipelines.registration.registration_icp(source_pc, target_pc, distance, initial_T, icp_type, iterations)
-    trans = np.asarray(deepcopy(result.transformation))
-    #if trans[0, 0]*trans[1, 1] < 0:
-    #    trans[:, 0] *= -1
-    source_pc.transform(trans)
-    scale_x = np.linalg.norm(trans[:, 0])
-    scale_y = np.linalg.norm(trans[:, 1])
-    scale_z = np.linalg.norm(trans[:, 2])
-    scale_z = trans[2, 2]
-    reflection = scale_z < 0
-    rot_mat = deepcopy(trans)
-    rot_mat[:, 0] /= scale_z
-    rot_mat[:, 1] /= scale_z
-    rot_mat[:, 2] /= scale_z
-    angle = np.rad2deg(np.arccos(rot_mat[0, 0]))
-
-    return np.array(source_pc.points)[:, :2], angle, reflection
-
-def rotate_angle(pts, angle):
-    rot_mat = np.array([[np.cos(angle), -np.sin(angle)],
-                        [np.sin(angle), np.cos(angle)]])
-    return np.matmul(rot_mat, pts.T).T
 
 
 def calculate_intersection(matrix_p, matrix_q):

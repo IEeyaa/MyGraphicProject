@@ -6,12 +6,10 @@ from copy import deepcopy
 
 import numpy as np
 from ortools.linear_solver import pywraplp
-
-# tmp_tuple = (stroke_id, *), array_tuple = (stroke_id, proxy_id) ...
-# 将array_tuple中的binary，所有的stroke_id = stroke_id的
 from scipy.spatial.distance import directed_hausdorff
 
 
+# 返回array_tuple中的与tmp_tuple匹配(其中 * 代表人一直)的二进制值
 def star_selector(array_tuple, tmp_tuple):
     indices = np.array([i for i, v in enumerate(tmp_tuple) if str(v) != "*"])
     values = np.array([v for i, v in enumerate(tmp_tuple) if str(v) != "*"])
@@ -24,37 +22,37 @@ class Correspondence:
                  partner_stroke_id, partner_candidate_id, plane_id, proxy_ids,
                  first_inter_stroke_id=-1, snd_inter_stroke_id=-1,
                  corr_id=-1, proxy_distances=-1):
-        self.stroke_3d = stroke_3d
-        self.own_stroke_id = own_stroke_id
-        self.own_candidate_id = own_candidate_id
-        self.partner_stroke_id = partner_stroke_id
-        self.partner_candidate_id = partner_candidate_id
-        self.plane_id = plane_id
-        self.proxy_ids = proxy_ids
+        self.stroke_3d = stroke_3d  # 3d重建(candidate2)
+        self.own_stroke_id = own_stroke_id  # s_id(candidate0)
+        self.own_candidate_id = own_candidate_id  # 属于当前s_id, p组合中的第几个
+        self.partner_stroke_id = partner_stroke_id  # p_s_id(candidate1)
+        self.partner_candidate_id = partner_candidate_id  # p_c_id
+        self.plane_id = plane_id  # plane_id(candidate4)
+        self.proxy_ids = proxy_ids  # 所涉及对应的所有proxy(candidate5)
         # if self-symmetric, note first and second inter-stroke-ids
-        self.first_inter_stroke_id = first_inter_stroke_id
-        self.snd_inter_stroke_id = snd_inter_stroke_id
-        self.corr_id = corr_id
-        self.proxy_distances = proxy_distances
+        self.first_inter_stroke_id = first_inter_stroke_id  # inter_id(candidate7)
+        self.snd_inter_stroke_id = snd_inter_stroke_id  # p_inter_id(candidate8)
+        self.corr_id = corr_id  # corr总ID
+        self.proxy_distances = proxy_distances  # 所有涉及的proxy与当前3d重建的霍夫曼距离
 
 
 def get_best_candidate_by_score(
         sketch,
         candidates,
         group_infor,
-        candidates_of_stroke,
         per_stroke_triple_intersections,
         intersections_3d,
         line_coverages,
         block,
-        stroke_anchor_info,
         plane_dir,
         fixed_strokes,
         fixed_intersections,
+        anchor_info,
 ):
     stroke_max = block[1] + 1
     plane_max = np.max(np.array([candidate[4] for candidate in candidates])) + 1
 
+    # [s_id][p_id]: [Correspondence, ...]
     per_stroke_per_plane_correspondences = [
         [[] for j in range(plane_max)]
         for i in range(stroke_max)
@@ -88,6 +86,7 @@ def get_best_candidate_by_score(
                            proxy_ids=first_proxy_ids, first_inter_stroke_id=first_inter_stroke_id,
                            snd_inter_stroke_id=snd_inter_stroke_id, corr_id=corr_id,
                            proxy_distances=deepcopy(first_proxy_distances)))
+
         if first_stroke_id != snd_stroke_id:
             snd_proxy_distances = []
             for p_id in snd_proxy_ids:
@@ -109,14 +108,14 @@ def get_best_candidate_by_score(
     symmetric_integer_program.SuppressOutput()
 
     # 定义变量
-    # stroke
+    # stroke(stroke_ids if len(fixed) == 0)
     stroke_indices = [s_id for s_id in range(stroke_max)
                       if len(fixed_strokes[s_id]) == 0 and s_id <= block[1]]
     stroke_variables_array = [np.array(stroke_indices).reshape(-1, 1),
                               np.array([symmetric_integer_program.IntVar(0, 1, str(i)) for i in stroke_indices])]
     stroke_variables_indices_dict = dict([(v, i) for i, v in enumerate(stroke_indices)])
 
-    # (stroke, plane)
+    # (stroke, plane, strokes for each plane)
     per_stroke_plane_indices = [(s_id, l) for l in range(plane_max)
                                 for s_id in range(stroke_max)
                                 if len(fixed_strokes[s_id]) == 0 and s_id <= block[1]]
@@ -137,25 +136,24 @@ def get_best_candidate_by_score(
 
     # correspondence
     correspondence_indices = []
-    nb_corr_vars = 0
-    nb_corr_links = 0
+
+    # c_id: 当前的Correspondence在s_id, plane的组合中是第几个（每一个stroke在不同的方向上有不同的重建）
+    # 这是一个字典，字典的key是(s_id, p_id, c_id, p_s_id, p_c_id, plane, corr_id)
     cluster_proximity_weights = {}
     for s_id in range(0, block[1] + 1):
         if len(fixed_strokes[s_id]) > 0:
             continue
         for l in range(plane_max):
             for corr in per_stroke_per_plane_correspondences[s_id][l]:
-                nb_corr_vars += 1
                 for vec_id, p_id in enumerate(corr.proxy_ids):
                     correspondence_indices.append((s_id, p_id, corr.own_candidate_id,
                                                    corr.partner_stroke_id, corr.partner_candidate_id, l,
                                                    corr.corr_id))
                     cluster_proximity_weights[correspondence_indices[-1]] = corr.proxy_distances[vec_id]
-                    nb_corr_links += 1
+    # correspondence 的情况
     correspondence_variables_array = [np.array(correspondence_indices),
                                       np.array([symmetric_integer_program.IntVar(0, 1, str(i)) for i in
                                                 correspondence_indices])]
-
     # intersection
     already_used = set()
     intersection_indices = []
@@ -172,6 +170,185 @@ def get_best_candidate_by_score(
     intersection_indices_dict = dict([(v, i) for i, v in enumerate(intersection_indices)])
 
     # 定义最终目标规范
+    # 参数
+    sym_co = 2.0
+    pro_co = -100.0
+    anchor_co = 5.0
+    cover_co = 8.0
+
+    # symmetric
+    obj_expr = 0
+    corr_term = 0
+    # 显示为每个stroke在每个plane上是否有重建
+    corr_term += sym_co * sum(per_stroke_plane_variables_array[1])
+    obj_expr += corr_term
+
+    # proximity
+    # 遍历所有的correspondence, cluster_proximity_term是每一个correspondence中的proxy_distances
+    cluster_proximity_term = 0
+    cluster_proximity_term += pro_co * sum(
+        [cluster_proximity_weights[v] * correspondence_variables_array[1][i] for i, v in
+         enumerate(correspondence_indices)])
+    obj_expr += cluster_proximity_term
+
+    total_anchor = 0
+    for stroke in sketch.strokes:
+        if stroke.id >= block[1] or len(fixed_strokes[stroke.id]) > 0:
+            continue
+        # 代表当前stroke被选中
+        total_anchor -= (2 - ((len(anchor_info[stroke.id])) >= 1) - ((len(anchor_info[stroke.id])) >= 2)) * \
+                        sum([stroke_variables_array[1][stroke_variables_indices_dict[stroke.id]]])
+    obj_expr += anchor_co * total_anchor
+    # anchor
+    # if len(per_stroke_triple_intersections) > 0:
+    #     # 可能成为half / full anchored 的stroke
+    #     half_anchored_ids = [s["s_id"] for s in per_stroke_triple_intersections
+    #                          if s["s_id"] in stroke_indices]
+    #     full_anchored_ids = [s["s_id"] for s in per_stroke_triple_intersections
+    #                          if s["s_id"] in stroke_indices]
+    #     half_anchored_vars_array = [np.array(half_anchored_ids).reshape(-1, 1),
+    #                                 np.array([symmetric_integer_program.IntVar(0, 1, str(i)) for i in half_anchored_ids])]
+    #     half_anchored_ids_dict = dict([(v, i) for i, v in enumerate(half_anchored_ids)])
+    #
+    #     full_anchored_vars_array = [np.array(full_anchored_ids).reshape(-1, 1),
+    #                                 np.array([symmetric_integer_program.IntVar(0, 1, str(i)) for i in full_anchored_ids])]
+    #     full_anchored_ids_dict = dict([(v, i) for i, v in enumerate(full_anchored_ids)])
+    #
+    #     i_triple_ids = []
+    #     k_axes_ids = []
+    #
+    #     potentially_full_anchored_stroke_ids = []
+    #     for s in per_stroke_triple_intersections:
+    #         if not s["s_id"] in stroke_indices:
+    #             continue
+    #         # 复制信息
+    #         for i_triple_inter in s["i_triple_intersections"]:
+    #             i_triple_ids.append((s["s_id"], i_triple_inter["inter_id"]))
+    #             for i in range(len(i_triple_inter["k_axes"])):
+    #                 k_axes_ids.append((s["s_id"], i_triple_inter["inter_id"], i))
+    #
+    #     i_triple_vars_array = [np.array(i_triple_ids),
+    #                            np.array([symmetric_integer_program.IntVar(0, 1, str(i)) for i in i_triple_ids])]
+    #
+    #     max_i_triple_vars_array = [np.array(i_triple_ids),
+    #                                np.array([symmetric_integer_program.IntVar(0, 1, str(i)) for i in i_triple_ids])]
+    #
+    #     min_i_triple_vars_array = [np.array(i_triple_ids),
+    #                                np.array([symmetric_integer_program.IntVar(0, 1, str(i)) for i in i_triple_ids])]
+    #     i_triple_ids_dict = dict([(v, i) for i, v in enumerate(i_triple_ids)])
+    #
+    #     k_axes_vars_array = [np.array(k_axes_ids),
+    #                          np.array([symmetric_integer_program.IntVar(0, 1, str(i)) for i in k_axes_ids])]
+    #     k_axes_ids_dict = dict([(v, i) for i, v in enumerate(k_axes_ids)])
+    #
+    #     # constraints
+    #     for s in per_stroke_triple_intersections:
+    #         if not s["s_id"] in stroke_indices:
+    #             continue
+    #         symmetric_integer_program.Add(half_anchored_vars_array[1][half_anchored_ids_dict[s["s_id"]]] <= sum(
+    #             star_selector(i_triple_vars_array, (s["s_id"], "*"))))
+    #         # choose only two i_triple per stroke
+    #         symmetric_integer_program.Add(sum(star_selector(i_triple_vars_array, (s["s_id"], "*"))) <= 2)
+    #         # full anchored strokes must have i_triples which are far away
+    #
+    #         ids = [i_triple_inter["inter_id"] for i_triple_inter in s["i_triple_intersections"]]
+    #         tmp_inters = [sketch.intersect_infor[inter_id] for inter_id in ids]
+    #         inter_params = {}
+    #         for tmp_inter in tmp_inters:
+    #             inter_params[tmp_inter.id] = np.array(tmp_inter.inter_params)[
+    #                 np.array(tmp_inter.stroke_id) == s["s_id"]]
+    #             symmetric_integer_program.Add(
+    #                 max_i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]] <=
+    #                 i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]])
+    #             symmetric_integer_program.Add(
+    #                 min_i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]] <=
+    #                 i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]])
+    #             symmetric_integer_program.Add(
+    #                 i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]] <= sum(
+    #                     star_selector(min_i_triple_vars_array, (s["s_id"], "*"))))
+    #             symmetric_integer_program.Add(
+    #                 i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]] <= sum(
+    #                     star_selector(max_i_triple_vars_array, (s["s_id"], "*"))))
+    #
+    #         if np.max(list(inter_params.values())) - np.min(list(inter_params.values())) >= 0.5:
+    #             potentially_full_anchored_stroke_ids.append(s["s_id"])
+    #
+    #         max_t_i_sum = sum([max_i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]] *
+    #                            inter_params[tmp_inter.id][0]
+    #                            for i, tmp_inter in enumerate(tmp_inters)])
+    #
+    #         min_t_i_sum = sum([min_i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]] *
+    #                            inter_params[tmp_inter.id][0]
+    #                            for i, tmp_inter in enumerate(tmp_inters)])
+    #
+    #         # full_anchored 的条件
+    #         symmetric_integer_program.Add(max_t_i_sum - min_t_i_sum >= 0.5 - 100.0 * (
+    #                 1 - full_anchored_vars_array[1][full_anchored_ids_dict[s["s_id"]]]))
+    #         # max和min都最多选一个
+    #         symmetric_integer_program.Add(sum(star_selector(max_i_triple_vars_array, (s["s_id"], "*"))) <= 1)
+    #         symmetric_integer_program.Add(sum(star_selector(min_i_triple_vars_array, (s["s_id"], "*"))) <= 1)
+    #
+    #         for i_triple_inter in s["i_triple_intersections"]:
+    #             symmetric_integer_program.Add(
+    #                 sum(star_selector(k_axes_vars_array, (s["s_id"], i_triple_inter["inter_id"], "*"))) \
+    #                 >= 3 - 1000.0 * (1 - i_triple_vars_array[1][
+    #                     i_triple_ids_dict[(s["s_id"], i_triple_inter["inter_id"])]]))
+    #             for i in range(len(i_triple_inter["k_axes"])):
+    #                 symmetric_integer_program.Add(k_axes_vars_array[1][k_axes_ids_dict[(s["s_id"], i_triple_inter["inter_id"], i)]] \
+    #                               <= sum(
+    #                     [sum(star_selector(intersection_variables_array, ("*", "*", inter_id))) for inter_id in
+    #                      i_triple_inter["k_axes"][i]]) \
+    #                               + np.sum(
+    #                     [inter_id in fixed_intersections for inter_id in i_triple_inter["k_axes"][i]]))
+    #
+    #     # half
+    #     half_anchored_mult_vars_array = [np.array(stroke_indices).reshape(-1, 1),
+    #                                      np.array(
+    #                                          [symmetric_integer_program.IntVar(0, 1, str(i)) for i in stroke_indices])]
+    #
+    #     for s in per_stroke_triple_intersections:
+    #         if not s["s_id"] in stroke_indices:
+    #             continue
+    #         symmetric_integer_program.Add(
+    #             half_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]] >= stroke_variables_array[1][
+    #                 stroke_variables_indices_dict[s["s_id"]]] + half_anchored_vars_array[1][
+    #                 half_anchored_ids_dict[s["s_id"]]] - 1)
+    #         symmetric_integer_program.Add(
+    #             half_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]] <= stroke_variables_array[1][
+    #                 stroke_variables_indices_dict[s["s_id"]]])
+    #         symmetric_integer_program.Add(
+    #             half_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]] <=
+    #                 half_anchored_vars_array[1][half_anchored_ids_dict[s["s_id"]]])
+    #
+    #     half_anchored_term = -sum([stroke_variables_array[1][stroke_variables_indices_dict[s["s_id"]]] -
+    #                                half_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]]
+    #                                for s in per_stroke_triple_intersections if s["s_id"] in stroke_indices])
+    #     # full
+    #     full_anchored_mult_vars_array = [np.array(stroke_indices).reshape(-1, 1),
+    #                                      np.array(
+    #                                          [symmetric_integer_program.IntVar(0, 1, str(i)) for i in stroke_indices])]
+    #
+    #     for s in per_stroke_triple_intersections:
+    #         if not s["s_id"] in potentially_full_anchored_stroke_ids:
+    #             continue
+    #         symmetric_integer_program.Add(
+    #             full_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]] >= stroke_variables_array[1][
+    #                 stroke_variables_indices_dict[s["s_id"]]] + full_anchored_vars_array[1][
+    #                 full_anchored_ids_dict[s["s_id"]]] - 1)
+    #         symmetric_integer_program.Add(
+    #             full_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]] <= stroke_variables_array[1][
+    #                 stroke_variables_indices_dict[s["s_id"]]])
+    #         symmetric_integer_program.Add(full_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]] <=
+    #                                       full_anchored_vars_array[1][full_anchored_ids_dict[s["s_id"]]])
+    #
+    #     half_anchored_term += -sum([stroke_variables_array[1][stroke_variables_indices_dict[s["s_id"]]] -
+    #                                 full_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]]
+    #                                 for s in per_stroke_triple_intersections if s["s_id"] in stroke_indices
+    #                                 if s["s_id"] in potentially_full_anchored_stroke_ids])
+    #
+    #     obj_expr += anchor_co * half_anchored_term
+
+    # coverage
     # line coverage
     structured_line_coverage_variables = []
     structured_line_coverage_variables_weights = []
@@ -195,197 +372,22 @@ def get_best_candidate_by_score(
         structured_line_coverage_variables.append([min_vars_array, max_vars_array])
         structured_line_coverage_variables_weights.append([min_vars_weights, max_vars_weights])
 
-    if len(per_stroke_triple_intersections) > 0:
-        half_anchored_ids = [s["s_id"] for s in per_stroke_triple_intersections
-                             if s["s_id"] in stroke_indices]
-        full_anchored_ids = [s["s_id"] for s in per_stroke_triple_intersections
-                             if s["s_id"] in stroke_indices]
-        half_anchored_vars_array = [np.array(half_anchored_ids).reshape(-1, 1),
-                                    np.array(
-                                        [symmetric_integer_program.IntVar(0, 1, str(i)) for i in half_anchored_ids])]
-        half_anchored_ids_dict = dict([(v, i) for i, v in enumerate(half_anchored_ids)])
-        full_anchored_vars_array = [np.array(full_anchored_ids).reshape(-1, 1),
-                                    np.array(
-                                        [symmetric_integer_program.IntVar(0, 1, str(i)) for i in full_anchored_ids])]
-        full_anchored_ids_dict = dict([(v, i) for i, v in enumerate(full_anchored_ids)])
-
-        i_triple_ids = []
-        k_axes_ids = []
-
-        potentially_full_anchored_stroke_ids = []
-        for s in per_stroke_triple_intersections:
-            if not s["s_id"] in stroke_indices:
-                continue
-            for i_triple_inter in s["i_triple_intersections"]:
-                i_triple_ids.append((s["s_id"], i_triple_inter["inter_id"]))
-                for i in range(len(i_triple_inter["k_axes"])):
-                    k_axes_ids.append((s["s_id"], i_triple_inter["inter_id"], i))
-
-        i_triple_vars_array = [np.array(i_triple_ids),
-                               np.array([symmetric_integer_program.IntVar(0, 1, str(i)) for i in i_triple_ids])]
-
-        max_i_triple_vars_array = [np.array(i_triple_ids),
-                                   np.array([symmetric_integer_program.IntVar(0, 1, str(i)) for i in i_triple_ids])]
-
-        min_i_triple_vars_array = [np.array(i_triple_ids),
-                                   np.array([symmetric_integer_program.IntVar(0, 1, str(i)) for i in i_triple_ids])]
-        i_triple_ids_dict = dict([(v, i) for i, v in enumerate(i_triple_ids)])
-
-        k_axes_vars_array = [np.array(k_axes_ids),
-                             np.array([symmetric_integer_program.IntVar(0, 1, str(i)) for i in k_axes_ids])]
-        k_axes_ids_dict = dict([(v, i) for i, v in enumerate(k_axes_ids)])
-
-        # constraints
-        for s in per_stroke_triple_intersections:
-            if not s["s_id"] in stroke_indices:
-                continue
-            symmetric_integer_program.Add(half_anchored_vars_array[1][half_anchored_ids_dict[s["s_id"]]] <= sum(
-                star_selector(i_triple_vars_array, (s["s_id"], "*"))))
-            # choose only two i_triple per stroke
-
-            symmetric_integer_program.Add(sum(star_selector(i_triple_vars_array, (s["s_id"], "*"))) <= 2)
-            # full anchored strokes must have i_triples which are far away
-
-            # 奇怪的地方？
-            ids = [i_triple_inter["inter_id"] for i_triple_inter in s["i_triple_intersections"]]
-            tmp_inters = [sketch.intersect_infor[inter_id] for inter_id in ids]
-            inter_params = {}
-            for tmp_inter in tmp_inters:
-                inter_params[tmp_inter.id] = np.array(tmp_inter.inter_params)[
-                    np.array(tmp_inter.stroke_id) == s["s_id"]]
-
-                symmetric_integer_program.Add(
-                    max_i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]] <=
-                    i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]])
-                symmetric_integer_program.Add(
-                    min_i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]] <=
-                    i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]])
-                symmetric_integer_program.Add(
-                    i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]] <= sum(
-                        star_selector(min_i_triple_vars_array, (s["s_id"], "*"))))
-                symmetric_integer_program.Add(
-                    i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]] <= sum(
-                        star_selector(max_i_triple_vars_array, (s["s_id"], "*"))))
-
-            if np.max(list(inter_params.values())) - np.min(list(inter_params.values())) >= 0.5:
-                potentially_full_anchored_stroke_ids.append(s["s_id"])
-
-            max_t_i_sum = sum([max_i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]] *
-                               inter_params[tmp_inter.id][0]
-                               for i, tmp_inter in enumerate(tmp_inters)])
-
-            min_t_i_sum = sum([min_i_triple_vars_array[1][i_triple_ids_dict[(s["s_id"], tmp_inter.id)]] *
-                               inter_params[tmp_inter.id][0]
-                               for i, tmp_inter in enumerate(tmp_inters)])
-
-            symmetric_integer_program.Add(max_t_i_sum - min_t_i_sum >= 0.5 - 100.0 * (
-                    1 - full_anchored_vars_array[1][full_anchored_ids_dict[s["s_id"]]]))
-            symmetric_integer_program.Add(sum(star_selector(max_i_triple_vars_array, (s["s_id"], "*"))) <= 1)
-            symmetric_integer_program.Add(sum(star_selector(min_i_triple_vars_array, (s["s_id"], "*"))) <= 1)
-
-            for i_triple_inter in s["i_triple_intersections"]:
-                symmetric_integer_program.Add(
-                    sum(star_selector(k_axes_vars_array, (s["s_id"], i_triple_inter["inter_id"], "*"))) \
-                    >= 3 - 1000.0 * (1 - i_triple_vars_array[1][
-                        i_triple_ids_dict[(s["s_id"], i_triple_inter["inter_id"])]]))
-                for i in range(len(i_triple_inter["k_axes"])):
-                    symmetric_integer_program.Add(
-                        k_axes_vars_array[1][k_axes_ids_dict[(s["s_id"], i_triple_inter["inter_id"], i)]] \
-                        <= sum(
-                            [sum(star_selector(intersection_variables_array, ("*", "*", inter_id))) for inter_id in
-                             i_triple_inter["k_axes"][i]]) + np.sum(
-                            [inter_id in fixed_intersections for inter_id in i_triple_inter["k_axes"][i]]))
-
-        # obj-term
-        half_anchored_mult_vars_array = [np.array(stroke_indices).reshape(-1, 1),
-                                         np.array([symmetric_integer_program.IntVar(0, 1, str(i)) for i in stroke_indices])]
-        for s in per_stroke_triple_intersections:
-            if not s["s_id"] in stroke_indices:
-                continue
-            symmetric_integer_program.Add(
-                half_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]] >= stroke_variables_array[1][
-                    stroke_variables_indices_dict[s["s_id"]]] + half_anchored_vars_array[1][
-                    half_anchored_ids_dict[s["s_id"]]] - 1)
-            symmetric_integer_program.Add(
-                half_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]] <= stroke_variables_array[1][
-                    stroke_variables_indices_dict[s["s_id"]]])
-            symmetric_integer_program.Add(half_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]] <=
-                                          half_anchored_vars_array[1][half_anchored_ids_dict[s["s_id"]]])
-
-        half_anchored_term = -sum([stroke_variables_array[1][stroke_variables_indices_dict[s["s_id"]]] -
-                                   half_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]]
-                                   for s in per_stroke_triple_intersections if s["s_id"] in stroke_indices])
-
-        full_anchored_mult_vars_array = [np.array(stroke_indices).reshape(-1, 1),
-                                         np.array(
-                                             [symmetric_integer_program.IntVar(0, 1, str(i)) for i in stroke_indices])]
-
-        for s in per_stroke_triple_intersections:
-            if not s["s_id"] in potentially_full_anchored_stroke_ids:
-                continue
-            symmetric_integer_program.Add(
-                full_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]] >= stroke_variables_array[1][
-                    stroke_variables_indices_dict[s["s_id"]]] + full_anchored_vars_array[1][
-                    full_anchored_ids_dict[s["s_id"]]] - 1)
-            symmetric_integer_program.Add(
-                full_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]] <= stroke_variables_array[1][
-                    stroke_variables_indices_dict[s["s_id"]]])
-            symmetric_integer_program.Add(full_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]] <=
-                                          full_anchored_vars_array[1][full_anchored_ids_dict[s["s_id"]]])
-
-        half_anchored_term += -sum([stroke_variables_array[1][stroke_variables_indices_dict[s["s_id"]]] -
-                                    full_anchored_mult_vars_array[1][stroke_variables_indices_dict[s["s_id"]]]
-                                    for s in per_stroke_triple_intersections if s["s_id"] in stroke_indices
-                                    if s["s_id"] in potentially_full_anchored_stroke_ids])
-
-    sym_co = 2.0
-    pro_co = -100.0
-    anchor_co = 2.0
-    cover_co = 4.0
-
-    # symmetric
-    obj_expr = 0
-    corr_term = 0
-    corr_term += sym_co * sum(per_stroke_plane_variables_array[1])
-    obj_expr += corr_term
-
-    # proximity
-    cluster_proximity_term = 0
-    cluster_proximity_term += pro_co * sum(
-        [cluster_proximity_weights[v] * correspondence_variables_array[1][i] for i, v in
-         enumerate(correspondence_indices)])
-    obj_expr += cluster_proximity_term
-
-    # anchor
-    # anchor_info = stroke_anchor_info
-    # total_anchor = 0
-    # for index, stroke_id in enumerate(stroke_variables_array[0]):
-    #     if stroke_id[0] > block[1] and len(fixed_strokes[stroke_id[0]]) > 0:
-    #         continue
-    #     # 代表当前stroke被选中
-    #     total_anchor -= (2 - ((len(anchor_info[stroke_id[0]])) >= 1) - ((len(anchor_info[stroke_id[0]])) >= 2)) * \
-    #                     stroke_variables_array[1][index]
-    # obj_expr += total_anchor * anchor_co
-
-    obj_expr += anchor_co * half_anchored_term
-
-    # coverage
     total_coverage = 0
     for s_i in range(len(structured_line_coverage_variables)):
         # Coverage部分（系数为4）
         if len(fixed_strokes[s_i]) > 0:
             continue
 
-        total_coverage += (sum([sum(star_selector(structured_line_coverage_variables[s_i][0],
-                                                  (s_i, i))) *
-                                structured_line_coverage_variables_weights[s_i][0][(s_i, i)]
-                                for i in range(
+        total_coverage += 1.0 * (sum([sum(star_selector(structured_line_coverage_variables[s_i][0],
+                                                        (s_i, i))) *
+                                      structured_line_coverage_variables_weights[s_i][0][(s_i, i)]
+                                      for i in range(
                 len(structured_line_coverage_variables_weights[s_i][0]))]) +
-                           sum([sum(star_selector(structured_line_coverage_variables[s_i][1],
-                                                  (s_i, i))) *
-                                structured_line_coverage_variables_weights[s_i][1][(s_i, i)]
-                                for i in range(
-                                   len(structured_line_coverage_variables_weights[s_i][1]))]))
+                                 sum([sum(star_selector(structured_line_coverage_variables[s_i][1],
+                                                        (s_i, i))) *
+                                      structured_line_coverage_variables_weights[s_i][1][(s_i, i)]
+                                      for i in range(
+                                         len(structured_line_coverage_variables_weights[s_i][1]))]))
 
     obj_expr += cover_co * total_coverage
 
@@ -401,29 +403,6 @@ def get_best_candidate_by_score(
                     sum(star_selector(correspondence_variables_array,
                                       ("*", "*", "*", s_id, "*", l, "*"))) >= 1 -
                     (1 - per_stroke_plane_variables_array[1][per_stroke_plane_indices_dict[s_id, l]]) * 100.0)
-
-    for s_i in range(len(structured_line_coverage_variables)):
-        if len(structured_line_coverage_variables[s_i][0]) == 0:
-            continue
-        # there can at most be one max/min line_coverage
-        symmetric_integer_program.Add(sum(structured_line_coverage_variables[s_i][0][1]) <= 1)
-        symmetric_integer_program.Add(sum(structured_line_coverage_variables[s_i][1][1]) <= 1)
-
-        for j in range(len(line_coverages[s_i])):
-            inter_id = line_coverages[s_i][j].inter_id
-            symmetric_integer_program.Add(sum(star_selector(structured_line_coverage_variables[s_i][0], ("*", j))) \
-                                          <= sum(star_selector(intersection_variables_array, ("*", "*", inter_id))))
-            symmetric_integer_program.Add(sum(star_selector(structured_line_coverage_variables[s_i][1], ("*", j))) \
-                                          <= sum(star_selector(intersection_variables_array, ("*", "*", inter_id))))
-        # there should at least be one max/min line_coverage if there's a 3d intersection
-        for inter in intersections_3d:
-            if inter.stroke_ids[0] == s_i or inter.stroke_ids[1] == s_i:
-                symmetric_integer_program.Add(
-                    sum(star_selector(intersection_variables_array, ("*", "*", inter.inter_id))) <= \
-                    sum(structured_line_coverage_variables[s_i][0][1]))
-                symmetric_integer_program.Add(
-                    sum(star_selector(intersection_variables_array, ("*", "*", inter.inter_id))) <= \
-                    sum(structured_line_coverage_variables[s_i][1][1]))
 
     # the contribution of a single stroke to a proxy can at most be one
     for s_id in range(stroke_max):
@@ -593,69 +572,27 @@ def get_best_candidate_by_score(
                     sum(star_selector(intersection_variables_array, ("*", "*", inter.inter_id))) <= \
                     sum(structured_line_coverage_variables[s_i][1][1]))
 
+    # final
     symmetric_integer_program.Maximize(obj_expr)
 
     status = symmetric_integer_program.Solve()
     if status == pywraplp.Solver.OPTIMAL:
         best_obj = symmetric_integer_program.Objective().Value()
-        # print("temp score:", best_obj)
 
-        variable_count = 0
-        final_correspondences = []
-        for corr_id, corr_var in enumerate(correspondence_variables_array[1]):
-            if not np.isclose(corr_var.solution_value(), 1.0):
-                continue
-            corr = np.array(corr_var.name().split("(")[1].split(")")[0].split(","), dtype=int).tolist()
-            variable_count += 1
-            i_1 = corr[0]
-            proxy_id = corr[1]
-            k_1 = corr[2]
-            i_2 = corr[3]
-            k_2 = corr[4]
-            plane_id = corr[5]
-
-            first_inter_stroke_id = per_stroke_per_plane_correspondences[i_1][plane_id][k_1].first_inter_stroke_id
-            snd_inter_stroke_id = per_stroke_per_plane_correspondences[i_1][plane_id][k_1].snd_inter_stroke_id
-            final_correspondences.append([i_1, i_2,
-                                          per_stroke_per_plane_correspondences[i_1][plane_id][k_1].stroke_3d,
-                                          per_stroke_per_plane_correspondences[i_2][plane_id][k_2].stroke_3d,
-                                          plane_id, first_inter_stroke_id, snd_inter_stroke_id, proxy_id,
-                                          corr[-1]])
         final_proxies = [None] * stroke_max
         final_intersections = []
-        final_line_weights = [[-1, -1] for i in range(stroke_max)]
-        # TODO: check for conflicting results
+
         for corr_var in proxy_variables_array[1]:
             if not np.isclose(corr_var.solution_value(), 1.0):
                 continue
             corr = np.array(corr_var.name().split("(")[1].split(")")[0].split(","), dtype=int).tolist()
-            variable_count += 1
             final_proxies[corr[0]] = group_infor[corr[0]][corr[1]]
 
         for corr_var in intersection_variables_array[1]:
             if not np.isclose(corr_var.solution_value(), 1.0):
                 continue
             corr = np.array(corr_var.name().split("(")[1].split(")")[0].split(","), dtype=int).tolist()
-            variable_count += 1
             final_intersections.append(corr)
-
-        for s_id in range(len(structured_line_coverage_variables)):
-            if len(fixed_strokes[s_id]) > 0:
-                continue
-            for corr_var in structured_line_coverage_variables[s_id][0][1]:
-                if not np.isclose(corr_var.solution_value(), 1.0):
-                    continue
-                variable_count += 1
-                corr = np.array(corr_var.name().split("(")[1].split(")")[0].split(","), dtype=int).tolist()
-                s_i, j = corr
-                final_line_weights[s_i][0] = line_coverages[s_i][j].weight
-            for corr_var in structured_line_coverage_variables[s_id][1][1]:
-                if not np.isclose(corr_var.solution_value(), 1.0):
-                    continue
-                variable_count += 1
-                corr = np.array(corr_var.name().split("(")[1].split(")")[0].split(","), dtype=int).tolist()
-                s_i, j = corr
-                final_line_weights[s_i][1] = line_coverages[s_i][j].weight
 
         # for index, item in enumerate(final_proxies):
         #     print(index)
@@ -663,6 +600,6 @@ def get_best_candidate_by_score(
         #         continue
         #     for i in item:
         #         print(i)
-        return best_obj, final_correspondences, final_proxies, final_intersections
+        return best_obj, final_proxies, final_intersections
     else:
         print('求解器未找到最优解。')

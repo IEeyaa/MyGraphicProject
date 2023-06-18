@@ -1,8 +1,7 @@
 import numpy as np
 from shapely.geometry import LineString, Point
 from skspatial.objects import Plane, Line
-
-from tools import tools_3d as tools_3d
+from other_tools import tools_3d
 
 
 class Camera:
@@ -85,17 +84,6 @@ class Camera:
     def lift_polyline_close_to_line(self, polyline, line_p, line_v):
         return [self.lift_point_close_to_line(p, line_p, line_v) for p in polyline]
 
-    def lift_point_to_plane(self, p, plane_p, plane_n):
-        lifted_point, camera_point_ray = self.get_camera_point_ray(p)
-        inter_p = tools_3d.line_plane_collision(plane_normal=plane_n, plane_point=plane_p,
-                                                ray_dir=camera_point_ray, ray_p=lifted_point)
-        return inter_p
-
-    # polyline_plane = Plane(plane_p, plane_n)
-    # return polyline_plane.intersect_line(Line(lifted_point, camera_point_ray))
-
-    def lift_polyline_to_plane(self, polyline, plane_p, plane_n):
-        return [self.lift_point_to_plane(p, plane_p, plane_n) for p in polyline]
 
     def lift_point(self, p, lambda_val):
         u, v = p[0], p[1]

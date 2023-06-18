@@ -1,17 +1,14 @@
 # -*- coding:utf-8 -*-
 # @Author: IEeya
 import math
+
 import numpy as np
-from matplotlib.collections import LineCollection
-from shapely import LineString, Point, STRtree
+from shapely import Point, STRtree
 
 from pylowstroke.sketch_camera import estimate_initial_camera_parameters
 from pylowstroke.sketch_vanishing_points import get_vanishing_points
 from tools.tools_2d import get_intersection_info
 from tools.tools_cluster import get_connected_sets, fit_strokes
-
-from matplotlib import pylab as pl, pyplot as plt
-import tools.sketch_tools as Tools
 
 
 class Stroke:
@@ -94,29 +91,6 @@ class Stroke:
 
     def calculate_dis_different(self, stroke):
         return self.lineString.distance(stroke.lineString)
-
-    def get_line_display_data(self, color_data, linewidth_data):
-        segs = []
-        lws = []
-        col = []
-        points_list = self.lineString.coords
-        for i in range(len(points_list) - 1):
-            p1 = points_list[i]
-            p2 = points_list[i + 1]
-            segs.append([p1, p2])
-
-            if color_data is not None:
-                c = np.mean([color_data(p1), color_data(p2)])
-                col.append(c)
-
-            if linewidth_data is not None:
-                try:
-                    l = 1.0
-                except KeyError:
-                    l = 1.0
-                lws.append(l)
-
-        return segs, lws, col
 
 
 class Sketch:
@@ -225,13 +199,11 @@ class Sketch:
             y = coordinates[:, 1]
             A = np.vstack([x, np.ones(len(x))]).T
             m, c = np.linalg.lstsq(A, y, rcond=None)[0]
-
-            if abs(c) < 5000:
+            if abs(c) < 600:
                 # 计算拟合直线上每个点到实际线上的垂直距离
                 distances = np.abs(m * x + c - y) / np.sqrt(m ** 2 + 1)
-
                 # 检查距离是否小于阈值，判断为直线
-                if np.any(distances >= threshold_distance):
+                if np.mean(distances) >= threshold_distance:
                     stroke.is_curved = True
                 else:
                     stroke.is_curved = False
@@ -285,71 +257,6 @@ class Sketch:
         vps, p, failed = self.get_vanishing_points()
         cam_param, lines_group, vps, vp_new_ind = estimate_initial_camera_parameters(vps, p, self)
         return cam_param, lines_group
-
-    def display_strokes_2(self,
-                          fig=None, ax=None,
-                          color_process=lambda s: "red",
-                          linewidth_data=1,
-                          linewidth_process=None,
-                          use_cmap=False,
-                          cmap=pl.cm.jet,
-                          norm_global=True,
-                          display_strokes=None):
-        """
-        process color based on stroke properties
-        """
-        if display_strokes is None:
-            display_strokes = []
-        if fig is None or ax is None:
-            fig, ax = plt.subplots()
-            ax.set_xlim(0, self.width)
-            ax.set_ylim(self.height, 0)
-        mn = np.inf
-        mx = -np.inf
-
-        display_data = []
-        for s in self.strokes:
-            (seg, lws, col) = s.get_line_display_data(None, linewidth_data)
-            if color_process is not None:
-                col = color_process(s)
-            if linewidth_data is None:
-                lws = [s.width]
-            if linewidth_process is not None:
-                lws = linewidth_process(lws)
-            if use_cmap:
-                colmin = np.min(col)
-                colmax = np.max(col)
-                if colmin < mn:
-                    mn = colmin
-                if colmax > mx:
-                    mx = colmax
-            display_data.append((seg, lws, col))
-
-        if use_cmap:
-            # normalize over all strokes
-            colors = [d[2] for d in display_data]
-            if norm_global:
-                col_data = Tools.normalize_list(colors, mn, mx)
-            else:
-                col_data = Tools.normalize_list(colors)
-            colors = cmap(col_data)
-            # get color data back in display_data
-            display_data = [(d[0], d[1], colors[d_id]) for d_id, d in enumerate(display_data)]
-
-        if len(display_strokes) == 0:
-            display_strokes = list(range(len(self.strokes)))
-        for d_stroke_id in display_strokes:
-            d = display_data[d_stroke_id]
-            col = d[2]
-            lc = LineCollection(d[0], linewidths=lws, colors=col, antialiaseds=True)
-            ax.add_collection(lc)
-
-            # 计算标签的位置
-            x_label = (d[0][0][0][0] + d[0][-1][0][0]) / 2
-            y_label = (d[0][0][0][1] + d[0][-1][0][1]) / 2
-
-            # 在线的中间位置添加标签
-            ax.text(x_label, y_label, f"{d_stroke_id}", color=col, fontsize=8, ha='center', va='center')
 
 
 class Intersection:

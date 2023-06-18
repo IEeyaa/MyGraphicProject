@@ -4,8 +4,6 @@ import numpy as np
 from shapely import LineString
 from sklearn import linear_model
 
-from symmetric_build.cluster_proxies import cluster_lines_non_unique_angles
-
 
 def get_connected_sets(adjacency_matrix):
     n = len(adjacency_matrix)
