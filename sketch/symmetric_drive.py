@@ -10,7 +10,6 @@ from other_tools.intersections import get_intersections_simple_batch, get_line_c
 from symmetric_build.get_best_candidate import get_best_candidate_by_score
 from symmetric_build.plane_reconstruct import get_scale_factor_for_each_plane, \
     gather_construction_from_dif_direction_per_block
-from tools.tools_cluster import cluster_3d_lines_correspondence
 
 
 def symmetric_driven_build(
@@ -24,11 +23,12 @@ def symmetric_driven_build(
     final_answer = []
     final_fixed_strokes = []
     max_score = 0
-    for plane in [0, -1]:
+    fixed_strokes = [[] for i in range(0, len(sketch.strokes))]
+    for plane in [1, -1]:
         print("checking for plane: ", plane)
         total_score = 0
-        fixed_strokes = [[] for i in range(0, len(sketch.strokes))]
-        fixed_intersections = []
+        if plane != -1:
+            fixed_strokes = [[] for i in range(0, len(sketch.strokes))]
         for block_number in range(0, len(blocks)):
             print("block: ", block_number)
             candidate_info = gather_construction_from_dif_direction_per_block(candidate, fixed_strokes)
@@ -56,8 +56,6 @@ def symmetric_driven_build(
             if len(local_candidate_correspondences) == 0:
                 continue
 
-            # stroke_proxies = [[] for s_id in range(len(sketch.strokes))]
-            # cluster_3d_lines_correspondence(local_candidate_correspondences, stroke_proxies, sketch)
             stroke_proxies = [[] for s_id in range(len(sketch.strokes))]
             cluster_proxy_strokes(local_candidate_correspondences,
                                   stroke_proxies, sketch)
@@ -69,8 +67,7 @@ def symmetric_driven_build(
 
             line_coverages_simple = get_line_coverages_simple(intersections_3d_simple, sketch, coverage_params)
 
-
-            score, answer, tmp_fixed_intersections = get_best_candidate_by_score(
+            score, answer = get_best_candidate_by_score(
                 sketch=sketch,
                 candidates=local_candidate_correspondences,
                 intersections_3d=intersections_3d_simple,
@@ -84,7 +81,6 @@ def symmetric_driven_build(
 
             tmp_final_answer = answer
             total_score += score
-            fixed_intersections.extend(tmp_fixed_intersections)
             for index, item in enumerate(tmp_final_answer):
                 if item is not None:
                     fixed_strokes[index].extend(item)

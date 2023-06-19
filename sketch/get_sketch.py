@@ -37,13 +37,19 @@ def get_sketch_from_image(filepath):
 
     # 提取宽度和高度
     values = viewBox.split(' ')
-    width = values[2]
-    height = values[3]
+    if len(values) > 4:
+        width = values[2]
+        height = values[3]
+    else:
+        width = 972
+        height = 972
 
     # 获取所有的polyline元素
     polyline_elements = graphInfo.getElementsByTagName("polyline")
 
     path_elements = graphInfo.getElementsByTagName("path")
+
+    line_elements = graphInfo.getElementsByTagName("line")
 
     # 创建存储Stroke对象的列表
     strokes = []
@@ -65,9 +71,27 @@ def get_sketch_from_image(filepath):
     for index_path, path_data in enumerate(path_elements):
         # 获取path的点坐标信息
         path = parse_path(path_data.getAttribute("d"))
+        if len(path) == 0:
+            continue
+        if path.start == path.end:
+            continue
         coordinates = [path.point(t) for t in np.linspace(0, 1.0, 10)]
         # 解析path信息，提取点坐标
         points = [(c.real, c.imag) for c in coordinates]
+        # 创建Stroke对象并添加到列表中
+        stroke = Stroke(LineString(points))
+        strokes.append(stroke)
+
+    for index_line, line_data in enumerate(line_elements):
+        # 获取line的起始点和结束点坐标
+        x1 = float(line_data.getAttribute("x1"))
+        y1 = float(line_data.getAttribute("y1"))
+        x2 = float(line_data.getAttribute("x2"))
+        y2 = float(line_data.getAttribute("y2"))
+
+        # 创建包含起始点和结束点的列表
+        points = [(x1, y1), (x2, y2)]
+
         # 创建Stroke对象并添加到列表中
         stroke = Stroke(LineString(points))
         strokes.append(stroke)

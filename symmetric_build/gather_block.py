@@ -18,7 +18,7 @@ from sklearn.cluster import MeanShift
 """
 
 
-def gather_block_from_symmetric_lines(candidates, min_dist=5):
+def gather_block_from_symmetric_lines(candidates, min_dist=10):
     time_distance = dict()
     """
         形成time_distance_map

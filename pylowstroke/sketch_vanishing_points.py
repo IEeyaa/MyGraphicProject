@@ -417,19 +417,18 @@ def checkOrthogonalityCriterion(v1sf, v2sf, v3sf):
 def get_line_primitives(sketch):
     all_lines = []
     for s_id, s in enumerate(sketch.strokes):
-
         if not s.is_curved:
-
             line_fitting = get_line_fitting(
                 np.array([p[0] for p in s.lineString.coords]),
                 np.array([p[1] for p in s.lineString.coords]))
-
             x_vals, y_vals, inside = trimLineCoordinatesDrawingField(
                 line_fitting[:2], line_fitting[2:], sketch.height)
-
-            all_lines.append(np.hstack([x_vals, y_vals]))
-            s.primitive_geometry = line_fitting
-            s.line_group = 0
+            if len(x_vals) > 0:
+                all_lines.append(np.hstack([x_vals, y_vals]))
+                s.primitive_geometry = line_fitting
+                s.line_group = 0
+            else:
+                s.line_group = 5
         else:
             s.line_group = 1
     # compute line intersections
@@ -440,17 +439,7 @@ def get_line_primitives(sketch):
 def get_vanishing_points(sketch):
     failed = False
     all_lines = get_line_primitives(sketch)
-    # print(len(sketch.strokes))
-    # print("all_lines")
-    # print(all_lines[:])
-    # for l in all_lines:
-    #    print(l)
-    # exit()
-    # print("len(all_lines)")
-    # print(len(all_lines))
     x_pts = compute_intersection_points(all_lines)
-    # print("len(x_pts)")
-    # print(len(x_pts))
     vote_arr = computeLinesPointsVotes(all_lines, x_pts)
     vote = np.sum(vote_arr, axis=0)
     sorted_indices = np.flip(np.argsort(vote))
@@ -463,8 +452,6 @@ def get_vanishing_points(sketch):
     active_lines = np.argwhere(lines_votes_vp1 * (max_length / distances) < 0.8).flatten()
     inactive_lines = np.argwhere(lines_votes_vp1 * (max_length / distances) >= 0.8).flatten()
     lines_votes_vp1 = np.array(list(lines_votes_vp1[active_lines]) + list(lines_votes_vp1[inactive_lines]))
-    # vp = computeVPGivenParallelLines(all_lines[inactive_lines])
-    # print(vp)
     vp = vp_selected
 
     # work with the remaining lines

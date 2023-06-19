@@ -151,13 +151,13 @@ class Sketch:
         # 生成所有的交叉情况
         index = 0
         for stroke in self.strokes:
+            self.intersect_dict[stroke.id] = []
+        for stroke in self.strokes:
             intersect_stroke_ids = self.get_stroke_neighborhood(stroke.id)
             # 得到所有的intersect_middle_params情况
             for intersect_stroke_id in intersect_stroke_ids:
                 intersect_stroke = self.strokes[intersect_stroke_id]
                 intersect_params_info = get_intersection_info(stroke.lineString, intersect_stroke.lineString)
-                if stroke.id not in self.intersect_dict:
-                    self.intersect_dict[stroke.id] = []
                 self.intersect_infor.append((Intersection(index, [stroke.id, intersect_stroke_id],
                                                           intersect_params_info[0],
                                                           intersect_params_info[1])))
@@ -255,6 +255,9 @@ class Sketch:
 
     def estimate_camera(self):
         vps, p, failed = self.get_vanishing_points()
+        if failed:
+            print("camera error")
+            exit(1)
         cam_param, lines_group, vps, vp_new_ind = estimate_initial_camera_parameters(vps, p, self)
         return cam_param, lines_group
 

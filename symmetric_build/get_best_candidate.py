@@ -172,7 +172,7 @@ def get_best_candidate_by_score(
     sym_co = 2.0
     pro_co = -100.0
     anchor_co = 5.0
-    cover_co = 10.0
+    cover_co = 20.0
 
     # symmetric
     obj_expr = 0
@@ -430,8 +430,7 @@ def get_best_candidate_by_score(
     if status == pywraplp.Solver.OPTIMAL:
         best_obj = symmetric_integer_program.Objective().Value()
 
-        final_proxies = [None] * stroke_max
-        final_intersections = []
+        final_proxies = [[] for i in range(stroke_max)]
 
         for corr_var in proxy_variables_array[1]:
             if not np.isclose(corr_var.solution_value(), 1.0):
@@ -439,12 +438,6 @@ def get_best_candidate_by_score(
             corr = np.array(corr_var.name().split("(")[1].split(")")[0].split(","), dtype=int).tolist()
             final_proxies[corr[0]] = group_infor[corr[0]][corr[1]]
 
-        for corr_var in intersection_variables_array[1]:
-            if not np.isclose(corr_var.solution_value(), 1.0):
-                continue
-            corr = np.array(corr_var.name().split("(")[1].split(")")[0].split(","), dtype=int).tolist()
-            final_intersections.append(corr)
-
-        return best_obj, final_proxies, final_intersections
+        return best_obj, final_proxies
     else:
         print('求解器未找到最优解。')

@@ -39,7 +39,7 @@ def preload_sketch(sketch):
     sketch.get_intersect_info()
     # 形成邻接表
     sketch.get_adjacent_intersections()
-    sketch.strokes[18].axis_label = 3
+    # sketch.strokes[18].axis_label = 3
 
     return cam, sketch
 

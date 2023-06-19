@@ -4,7 +4,6 @@ import numpy as np
 def findFirstVisibleStrokeTowardsVP(probabilitiesVP, sketch):
     ind_stroke = 0  # Index of the stroke in the sketch
     lj = 0  # Index of the stroke among consecutive straight strokes
-
     lines_group = np.argmax(probabilitiesVP, axis=1)
 
     while sketch.strokes[ind_stroke].line_group != 0 or lines_group[lj] == 3:
