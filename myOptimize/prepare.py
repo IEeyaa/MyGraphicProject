@@ -29,7 +29,7 @@ def prepare_candidates_and_intersections(
     blocks = gather_block_from_symmetric_lines(candidate)
 
     # 手动分组
-    blocks = [[0, 10], [11, 24], [25, 35], [36, 46]]
+    blocks = [[0, 16], [17, 26], [27, 46]]
 
     print(blocks)
     answer = symmetric_driven_build(

@@ -3,6 +3,7 @@
 
 import numpy as np
 
+from symmetric_build.create_candidates import generate_final_candidates
 from tools import tools_3d
 from other_tools.cluster_proxies import cluster_proxy_strokes
 from other_tools.common_tools import copy_correspondences_batch
@@ -51,18 +52,24 @@ def symmetric_driven_build(
             continue
 
         stroke_proxies = [[] for s_id in range(len(sketch.strokes))]
+        # 聚合所有的proxy
         cluster_proxy_strokes(local_candidate_correspondences,
                               stroke_proxies, sketch)
-        # 把所有的stroke_proxies 3D化
+        # 生成最终的candidates
+        final_candidates, candidate_plane_max = generate_final_candidates(local_candidate_correspondences,
+                                                                          blocks[block_number][1]+1, stroke_proxies)
 
+        # 把所有的stroke_proxies 3D化
         intersections_3d_simple = get_intersections_simple_batch(
             stroke_proxies, sketch, cam, blocks[block_number], fixed_strokes)
 
         line_coverages_simple = get_line_coverages_simple(intersections_3d_simple, sketch, coverage_params)
 
+
         score, answer = get_best_candidate_by_score(
             sketch=sketch,
-            candidates=local_candidate_correspondences,
+            candidates=final_candidates,
+            candidate_plane_max=candidate_plane_max,
             intersections_3d=intersections_3d_simple,
             line_coverages=line_coverages_simple,
             block=blocks[block_number],

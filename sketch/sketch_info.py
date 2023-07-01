@@ -305,3 +305,16 @@ class LineCoverage:
         self.inter_id = inter_id
         self.stroke_proxy_ids = stroke_proxy_ids
         self.stroke_ids = stroke_ids
+
+
+# 针对每个stroke，给出所有的3D重建以及相关联信息
+class Candidates:
+    def __init__(self, candidate_id, stroke_3d, stroke_2d_ids, stroke_2d_inter_ids, stroke_indexes, proxy_info):
+        self.candidate_id = candidate_id            # 对应的candidate序号
+        self.stroke_3d = stroke_3d                  # 3d重建
+        self.stroke_2d_ids = stroke_2d_ids          # symmetric的2d_ids(针对dif_symmetric)
+        self.stroke_2d_inter_ids = stroke_2d_inter_ids      # 依据的相交线(仅针对self_symmetric)
+        self.stroke_indexes = stroke_indexes        # 重建对应序号
+        self.proxy_info = proxy_info                # 相关联的proxy
+
+
