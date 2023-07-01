@@ -29,7 +29,6 @@ class Correspondence:
         self.partner_candidate_id = partner_candidate_id  # p_c_id
         self.plane_id = plane_id  # plane_id(candidate4)
         self.proxy_ids = proxy_ids  # 所涉及对应的所有proxy(candidate5)
-        # if self-symmetric, note first and second inter-stroke-ids
         self.first_inter_stroke_id = first_inter_stroke_id  # inter_id(candidate7)
         self.snd_inter_stroke_id = snd_inter_stroke_id  # p_inter_id(candidate8)
         self.corr_id = corr_id  # corr总ID
@@ -43,7 +42,6 @@ def get_best_candidate_by_score(
         intersections_3d,
         line_coverages,
         block,
-        plane_dir,
         fixed_strokes,
         anchor_info,
 ):
@@ -99,14 +97,10 @@ def get_best_candidate_by_score(
 
     # 使用ortools的linear_solver来解决问题
     symmetric_integer_program = pywraplp.Solver.CreateSolver('SAT_INTEGER_PROGRAMMING')
-    if not symmetric_integer_program:
-        print("The OR-Tools solver could not be created. Check your installation")
-        return
     # 抑制输出
     symmetric_integer_program.SuppressOutput()
 
     # 定义变量
-    # stroke(stroke_ids if len(fixed) == 0)
     stroke_indices = [s_id for s_id in range(stroke_max)
                       if len(fixed_strokes[s_id]) == 0 and s_id <= block[1]]
     stroke_variables_array = [np.array(stroke_indices).reshape(-1, 1),
@@ -172,7 +166,7 @@ def get_best_candidate_by_score(
     sym_co = 2.0
     pro_co = -100.0
     anchor_co = 5.0
-    cover_co = 20.0
+    cover_co = 10.0
 
     # symmetric
     obj_expr = 0
@@ -242,18 +236,6 @@ def get_best_candidate_by_score(
 
     obj_expr += cover_co * total_coverage
 
-    for s_id in range(stroke_max):
-        if len(fixed_strokes[s_id]) == 0:
-            symmetric_integer_program.Add(
-                sum(star_selector(proxy_variables_array, (s_id, "*"))) <= stroke_variables_array[1][
-                    stroke_variables_indices_dict[s_id]])
-            # Cap correspondences to one per plane. We only want to know if a certain plane has been chosen
-            for l in range(plane_max):
-                symmetric_integer_program.Add(
-                    sum(star_selector(correspondence_variables_array, (s_id, "*", "*", "*", "*", l, "*"))) +
-                    sum(star_selector(correspondence_variables_array,
-                                      ("*", "*", "*", s_id, "*", l, "*"))) >= 1 -
-                    (1 - per_stroke_plane_variables_array[1][per_stroke_plane_indices_dict[s_id, l]]) * 100.0)
 
     # the contribution of a single stroke to a proxy can at most be one
     for s_id in range(stroke_max):
@@ -273,10 +255,21 @@ def get_best_candidate_by_score(
                                                                             (s_id, p_id, "*", other_s_id, "*", l,
                                                                              "*"))) <=
                                                           proxy_variables_array[1][proxy_indices_dict[s_id, p_id]])
-                # global symmetry constraint
-                if plane_dir > -1:
-                    symmetric_integer_program.Add(proxy_variables_array[1][proxy_indices_dict[s_id, p_id]] <= sum(
-                        star_selector(correspondence_variables_array, (s_id, p_id, "*", "*", "*", plane_dir, "*"))))
+
+
+    # constrains
+    for s_id in range(stroke_max):
+        if len(fixed_strokes[s_id]) == 0:
+            symmetric_integer_program.Add(
+                sum(star_selector(proxy_variables_array, (s_id, "*"))) <= stroke_variables_array[1][
+                    stroke_variables_indices_dict[s_id]])
+            # Cap correspondences to one per plane. We only want to know if a certain plane has been chosen
+            for l in range(plane_max):
+                symmetric_integer_program.Add(
+                    sum(star_selector(correspondence_variables_array, (s_id, "*", "*", "*", "*", l, "*"))) +
+                    sum(star_selector(correspondence_variables_array,
+                                      ("*", "*", "*", s_id, "*", l, "*"))) >= 1 -
+                    (1 - per_stroke_plane_variables_array[1][per_stroke_plane_indices_dict[s_id, l]]) * 100.0)
 
     already_covered_correspondences = set()
     for s_id in range(stroke_max):
@@ -312,7 +305,8 @@ def get_best_candidate_by_score(
         # coherent self-symmetry selection
         # only select a self-symmetric correspondence if both of their intersecting
         # strokes are symmetric
-        # except for ellipses
+        # 约束: 当一个自对称线的对称组都被选中时，选择它
+
         for l in range(plane_max):
             for corr in per_stroke_per_plane_correspondences[s_id][l]:
                 i_1 = s_id
@@ -323,17 +317,9 @@ def get_best_candidate_by_score(
                 first_inter_stroke_id = corr.first_inter_stroke_id
                 snd_inter_stroke_id = corr.snd_inter_stroke_id
 
-                # avoid degenerate cases
-                if first_inter_stroke_id == snd_inter_stroke_id:
-                    # allow self-symmetric cases where there's no intersection
-                    if first_inter_stroke_id == -1:
-                        continue
-                    symmetric_integer_program.Add(
-                        sum(star_selector(correspondence_variables_array, (s_id, "*", k_1, "*", "*", l, "*"))) == 0)
-                    continue
-
                 if len(fixed_strokes[first_inter_stroke_id]) > 0 and len(fixed_strokes[snd_inter_stroke_id]) > 0:
                     continue
+
                 if len(fixed_strokes[first_inter_stroke_id]) > 0:
                     tmp = snd_inter_stroke_id
                     snd_inter_stroke_id = first_inter_stroke_id
@@ -355,7 +341,6 @@ def get_best_candidate_by_score(
                 # coherent symmetry selection constraint
                 # only allow for this self-symmetry if any symmetry correspondence
                 # between the two first strokes has been validated
-
                 symmetric_integer_program.Add(
                     sum(star_selector(correspondence_variables_array, (s_id, "*", k_1, "*", "*", l, "*"))) <= \
                     sum(star_selector(correspondence_variables_array, (

@@ -1,5 +1,5 @@
 import numpy as np
-from other_tools import tools_3d
+from tools import tools_3d
 
 
 def cluster_lines_non_unique_angles(lines):

@@ -6,10 +6,11 @@ from sketch.preload_sketch import preload_sketch
 from tools.tools_visualization import visualize_polyscope
 import time
 
+
 def symmetric_build_from_2D_to_3D():
 
     time_start = time.time()  # 开始计时
-    filepath = "./data/student9_house_view1_concept.svg"
+    filepath = "./data/sketch.svg"
     sketch = get_sketch_from_image(filepath)
     cam, sketch = preload_sketch(sketch)
     answer = prepare_candidates_and_intersections(cam, sketch)

@@ -39,7 +39,7 @@ def preload_sketch(sketch):
     sketch.get_intersect_info()
     # 形成邻接表
     sketch.get_adjacent_intersections()
-    # sketch.strokes[18].axis_label = 3
+    sketch.strokes[18].axis_label = 3
 
     return cam, sketch
 
@@ -71,8 +71,6 @@ def visualize_lines(line_datas):
         for i in range(len(line_data) - 1):
             start_point = line_data[i]
             end_point = line_data[i + 1]
-            print(start_point)
-            print(end_point)
             ax.plot([start_point[0], end_point[0]], [start_point[1], end_point[1]], [start_point[2], end_point[2]])
 
     # 设置坐标轴范围

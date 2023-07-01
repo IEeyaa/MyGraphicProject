@@ -28,7 +28,10 @@ def visualize_polyscope(result, cam):
         if s is not None:
             if len(s[1]) == 0:
                 continue
-            plot_curve_ps(s[0], s[1])
+            try:
+                plot_curve_ps(s[0], s[1])
+            except:
+                continue
 
     setup_cam_ps(cam)
     ps.show()

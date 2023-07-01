@@ -1,7 +1,7 @@
 import numpy as np
 from copy import deepcopy
 
-from other_tools import tools_3d
+from tools import tools_3d
 from sketch.sketch_info import LineCoverage, Intersection3D
 
 

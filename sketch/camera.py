@@ -1,7 +1,7 @@
 import numpy as np
 from shapely.geometry import LineString, Point
 from skspatial.objects import Plane, Line
-from other_tools import tools_3d
+from tools import tools_3d
 
 
 class Camera:

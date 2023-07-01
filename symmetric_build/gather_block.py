@@ -18,7 +18,7 @@ from sklearn.cluster import MeanShift
 """
 
 
-def gather_block_from_symmetric_lines(candidates, min_dist=10):
+def gather_block_from_symmetric_lines(candidates, min_dist=4):
     time_distance = dict()
     """
         形成time_distance_map
@@ -87,13 +87,20 @@ def gather_block_from_symmetric_lines(candidates, min_dist=10):
     # 处理结尾
     if histogram_length - right_bound > min_dist:
         block_info.append([right_bound, histogram_length])
-
-    # 分解大块
     final_bound = []
-    for item in block_info:
+    n = len(block_info)
+    i = 0
+    while i < n:
+        item = block_info[i]
         if item[1] - item[0] >= 30:
             half = ceil((item[1] - item[0]) / 2)
             final_bound.append([[item[0], item[0] + half], [item[0] + half + 1, item[1]]])
         else:
-            final_bound.append([item[0], item[1]])
+            merged_item = [item[0], item[1]]
+            if item[1] - item[0] < 10:
+                merged_item[1] = block_info[i + 1][1]
+                i += 1
+            final_bound.append(merged_item)
+        i += 1
     return final_bound
+

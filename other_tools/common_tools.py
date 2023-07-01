@@ -2,7 +2,7 @@ import numpy as np
 from scipy.spatial import distance
 from shapely.geometry import LineString
 
-from other_tools import tools_3d
+from tools import tools_3d
 
 
 def equi_resample_polyline(poly, dist):

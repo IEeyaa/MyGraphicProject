@@ -42,7 +42,6 @@ def get_scale_factor_for_each_plane(cam, candidates_info, sketch, block):
     :param sketch: 草图
     :param block: 当前块
     :return: plane的缩放因子[0-1之间]
-
     """
 
     intersect_info = sketch.intersect_infor

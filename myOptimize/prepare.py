@@ -24,9 +24,13 @@ def prepare_candidates_and_intersections(
     stroke_anchor_info = get_anchor_from_intersection(sketch)
 
     # 形成block
+
+    # 自动分组
     blocks = gather_block_from_symmetric_lines(candidate)
-    # blocks = [[0, 9], [10, 24], [25, 35], [36, 46]]
-    # blocks = [[0, 46]]
+
+    # 手动分组
+    blocks = [[0, 10], [11, 24], [25, 35], [36, 46]]
+
     print(blocks)
     answer = symmetric_driven_build(
         sketch=sketch,
